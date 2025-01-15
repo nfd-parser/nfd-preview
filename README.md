@@ -1,16 +1,10 @@
 # jPreview
-
+fork https://gitee.com/raingad/j-preview
 #### 介绍
 一款纯JQ实现的预览插件，支持office文档，图片，音乐，视频，pdf等常用的文件！部分不支持的文档采用officeOnline在线预览。
 
-支持doc、docx、ppt、pptx、wps、xls、xlsx、pdf、mp4、mp3、jpg、png等常用的文件。
-
-体验地址：[https://view.raingad.com/](https://view.raingad.com/)
-
-体验链接
-```html
-https://view.raingad.com/preview.html?src=你的文件地址
-```
+支持doc、docx、ppt、pptx、wps、xls、xlsx、pdf、mp4、mp3、jpg、png、markdown、txt等常用的文件。
+支持源码文件(js、cpp、java等)高亮展示。
 
 其他文件支持持续更新中...
 
