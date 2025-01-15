@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>文件预览插件</title>
+	<link rel="stylesheet" href="static/common/css/main.css">
+	<link rel="stylesheet" href="https://unpkg.com/element-ui@2.15.13/lib/theme-chalk/index.css">
+	<link rel="stylesheet" href="static/common/css/audio.css">
+	<link rel="stylesheet" href="static/luckysheet/css/pluginsCss.css">
+	<link rel="stylesheet" href="static/luckysheet/css/plugins.css">
+	<link rel="stylesheet" href="static/luckysheet/css/luckysheet.css">
+	<link rel="stylesheet" href="static/luckysheet/css/iconfont.css">
+	<link rel="stylesheet" href="static/pptxjs/css/pptxjs.css">
+	<link rel="stylesheet" href="static/pptxjs/css/nv.d3.min.css">
+	<link rel="stylesheet" href="static/viewer/viewer.css">
+	<link rel="stylesheet" href="static/prism/prism.css">
+</head>
+<body>
+<div id="el-app">
+	<div id="container">
+	</div>
+</div>
+
+<!-- built files will be auto injected -->
+
+<script type="text/javascript" src="static/jquery-2.0.3.min.js"></script>
+<script type="text/javascript" src="https://unpkg.com/vue@2.7.14/dist/vue.js"></script>
+<script src="https://unpkg.com/element-ui@2.15.13/lib/index.js"></script>
+<script type="text/javascript" src="static/jPreview.js"></script>
+<script>
+	var app = new Vue({
+		delimiters: ['${', '}'],
+		el: '#el-app',
+		data(){
+			return {
+				loading: true,
+			};
+		},
+		created(){
+			const loading = this.$loading({
+				lock: true,
+				text: '资源加载中...',
+				spinner: 'el-icon-loading',
+				background: 'rgba(0, 0, 0, 0.9)'
+			});
+			this.$nextTick(function(){
+				jPreview.preview({
+					container:"container", // 容器id
+					staticPath:"./static", // 静态资源路径
+					url:"", // 预览资源路径，没有的话获取url中scr参数
+					ext:"",  // 资源后缀，如果url中没有的话，必须传入后缀名，否则无法识别文件类型
+					name:"",  // 资源名称
+					// watermarkTxt:"文件预览系统", // 水印文字
+					watermarkSize:"", // 水印文字大小
+					priority:1, // 优先级 1：使用插件预览 2：使用office在线预览，
+					oburl:"", // 可自动设置在线设置office线上预览地址，不需要的话可以不传
+				});
+				loading.close();
+			})
+		}
+	})
+	</script>
+</body>
+</html>
