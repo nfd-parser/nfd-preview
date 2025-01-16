@@ -14,13 +14,13 @@ let jPreview={
         this.config = $.extend({}, this.config, opts);
 
         // 定义可能的文件名参数，方便扩展
-        const filenameParams = ['response-content-disposition', 'filename', 'filename*', 'fn'];
+        const filenameParams = ['response-content-disposition', 'filename', 'filename*', 'fn', 'download_name'];
 
         // 解析URL
         if (this.config.url === '') {
             this.config.url = this.parseUrl('src');
         }
-        const url = decodeURIComponent(this.config.url);
+        const url = this.config.url;
 
         // 检测优先级参数
         const pri = this.parseUrl('pri');
@@ -120,7 +120,7 @@ let jPreview={
                 self.imgView(url);
             })
         }else if($.inArray(ext,pdfExt)>=0){
-            self.pdfView(url);
+            self.pdfView(encodeURIComponent(decodeURIComponent(url)));
         }else if($.inArray(ext,audioExt)>=0){
             dynamicLoadJs(static+"/common/js/audio.js",function(){
                 self.audioView(url);
@@ -192,6 +192,7 @@ let jPreview={
             });
     },
     olView(url){
+        url = encodeURIComponent(decodeURIComponent(url))
         $("body").css({overflow:'hidden'});
         // 如果是ppt,doc文档，直接使用office在线预览
         $("body").html("<iframe src='"+this.config.oburl+url+"' style='width:100%;height:100%;position:absolute;left:0;top:0'></iframe>");return;
