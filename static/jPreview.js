@@ -197,26 +197,77 @@ let jPreview={
         // 如果是ppt,doc文档，直接使用office在线预览
         $("body").html("<iframe src='"+this.config.oburl+url+"' style='width:100%;height:100%;position:absolute;left:0;top:0'></iframe>");return;
     },
-    getFileInfo(url,callback){
-        let self=this;
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', url);
-        xhr.responseType = "arraybuffer";
-        xhr.onload = function (e) {
-            var data = xhr.response;
-            if(!data){loading.close();loading = false;return;};
-            var file = {name: self.config.name, ext: self.config.ext, content: data};
-            callback(file);
-        };
-        xhr.send();
-        xhr.onreadystatechange = function(){    // 请求状态
-            if(xhr.readyState==4){
-                if (xhr.status < 200 || (xhr.status > 300 && xhr.status != 304)) {
-                    console.log('error');
+    // getFileInfo(url,callback){
+    //     let self=this;
+    //     var xhr = new XMLHttpRequest();
+    //     xhr.open('GET', url);
+    //     xhr.responseType = "arraybuffer";
+    //     xhr.onload = function (e) {
+    //         var data = xhr.response;
+    //         if(!data){loading.close();loading = false;return;};
+    //         var file = {name: self.config.name, ext: self.config.ext, content: data};
+    //         callback(file);
+    //     };
+    //     xhr.send();
+    //     xhr.onreadystatechange = function () {    // 请求状态
+    //         if (xhr.readyState == 4) {
+    //             if (xhr.status < 200 || (xhr.status > 300 && xhr.status != 304)) {
+    //                 console.log('error');
+    //                 $("body").html(`<div class='text-preview'>请求文件URL错误, 源地址已失效或CROS受限<div>`);
+    //             }
+    //         }
+    //     };
+    // },
+    getFileInfo(url, callback) {
+        let self = this;
+
+        // 使用 fetch 请求
+        fetch(url)
+            .then(response => {
+                // 检查响应是否为有效的 URL 和状态
+                if (!response.ok) {
+                    throw new Error(`HTTP 错误: ${response.status}`);
                 }
-            }
-        };
+
+                // 检查 content-disposition 是否包含文件名和扩展名
+                const contentDisposition = response.headers.get('content-disposition');
+                let fileName = self.config.name;
+                let fileExt = self.config.ext;
+
+                if (contentDisposition) {
+                    const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+                    if (filenameMatch) {
+                        const filePath = filenameMatch[1];
+                        fileExt = filePath.split('.').pop().toLowerCase();
+                        fileName = filePath.replace(`.${fileExt}`, "");
+                    }
+                }
+
+                // 获取文件内容
+                return response.arrayBuffer().then(data => {
+                    return {name: fileName, ext: fileExt, content: data};
+                });
+            })
+            .then(file => {
+                callback(file);
+            })
+            .catch(error => {
+                // 错误处理
+                console.error('获取文件信息时出错:', error.message);
+
+                // 检查错误类型
+                if (error.message.includes('HTTP 错误')) {
+                    $("body").html(`<div class='text-preview'>请求的文件 URL 错误，状态码: ${error.message.split(':')[1]}</div>`);
+                } else if (error.message.includes('CORS')) {
+                    $("body").html("<div class='text-preview'>跨域请求被阻止，无法访问该文件。</div>");
+                } else if (error.message.includes('Failed to fetch')) {
+                    $("body").html("<div class='text-preview'>无法获取文件，URL 无效或网络问题。</div>");
+                } else {
+                    $("body").html("<div class='text-preview'>未知错误，请检查 URL 或网络连接。</div>");
+                }
+            });
     },
+
     parseUrl(field, urlstr = window.location.href) {
         const url = new URL(urlstr);
         const params = new URLSearchParams(url.search);
@@ -246,7 +297,7 @@ let jPreview={
             showinfobar: false, // 是否显示顶部信息栏
             // showsheetbar: false, // 是否显示底部sheet页按钮
             // showstatisticBar: false, // 是否显示底部计数栏
-            sheetBottomConfig: false, // sheet页下方的添加行按钮和回到顶部按钮配置
+            sheetBottomConfig: true, // sheet页下方的添加行按钮和回到顶部按钮配置
             allowEdit: false, // 是否允许前台编辑——edit
             enableAddRow: false, // 允许增加行
             enableAddCol: false, // 允许增加列
@@ -254,7 +305,16 @@ let jPreview={
             // showRowBar: false, // 是否显示行号区域
             // showColumnBar: false, // 是否显示列号区域
             // sheetFormulaBar: false, // 是否显示公式栏
-            enableAddBackTop: false,//返回头部按钮
+            enableAddBackTop: true,//返回头部按钮
+            showtoolbarConfig: {
+                sortAndFilter: true, // '排序和筛选'
+                conditionalFormat: true, // '条件格式'
+                dataVerification: true, // '数据验证'
+                screenshot: false, // '截图'
+                findAndReplace: false, // '查找替换'
+                print:true, // '打印'
+            }
+
             // functionButton: '<button id="" class="btn btn-primary" style="padding:3px 6px;font-size: 12px;margin-right: 10px;">下载</button>',  // 需要显示信息栏
         });
     },
@@ -374,6 +434,47 @@ let jPreview={
     },
     pdfView(url){
         $("body").html("<iframe src='./static/pdfjs/web/viewer.html?file="+url+"' style='width:100%;height:100vh;border:none;display:block'></iframe>");
+    },
+    // 假设已经通过请求得到了blob对象
+    previewPdf(blob) {
+        const array = new Uint8Array(blob.size);
+        const reader = new FileReader();
+
+        reader.onload = function (e) {
+            for (let i = 0; i < blob.size; i++) {
+                array[i] = e.target.result[i];
+            }
+            const url = `pdfjs-dist/build/pdf.worker.entry.js`; // 确保这是正确的路径
+            pdfjsLib.GlobalWorkerOptions.workerSrc = url;
+
+            pdfjsLib.getDocument({data: array}).promise.then(pdfDoc => {
+                console.log('PDF loaded');
+
+                // 这里可以添加代码来渲染PDF
+                // 例如，显示第一页
+                pdfDoc.getPage(1).then(page => {
+                    const scale = 1.5;
+                    const viewport = page.getViewport({scale: scale});
+
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: viewport
+                    };
+                    page.render(renderContext);
+                    // 将canvas添加到页面中以显示PDF
+                    document.body.appendChild(canvas);
+                });
+            }).catch(function (error) {
+                console.error('Error: ' + error);
+            });
+        };
+
+        reader.readAsArrayBuffer(blob);
     },
     imgView(url){
         $('#'+this.config.container).html('<div style="height:100vh"><img id="image" style="display:none" src="'+url+'" alt="Picture"></div>');
