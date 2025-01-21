@@ -222,7 +222,10 @@ let jPreview={
         let self = this;
 
         // 使用 fetch 请求
-        fetch(url)
+        fetch(url, {
+            method: "GET",
+            referrerPolicy: "no-referrer" // 禁止发送 Referer
+        })
             .then(response => {
                 // 检查响应是否为有效的 URL 和状态
                 if (!response.ok) {
