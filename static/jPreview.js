@@ -14,7 +14,7 @@ let jPreview={
         this.config = $.extend({}, this.config, opts);
 
         // 定义可能的文件名参数，方便扩展
-        const filenameParams = ['response-content-disposition', 'filename', 'filename*', 'fn', 'download_name'];
+        const filenameParams = ['response-content-disposition', 'filename', 'filename*', 'fn', 'fname', 'download_name'];
 
         // 解析URL
         if (this.config.url === '') {
