@@ -48,6 +48,10 @@ let jPreview={
             const decodedUrl = decodeURIComponent(url);
             const paths = decodedUrl.split('/');
             name = paths[paths.length - 1].split('?')[0]; // 去掉查询参数
+<<<<<<< HEAD
+=======
+            
+>>>>>>> origin/master
         }
 
         // 提取扩展名
