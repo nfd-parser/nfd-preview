@@ -47,8 +47,7 @@ let jPreview={
             // 如果没有filename参数，从URL路径中解析
             const decodedUrl = decodeURIComponent(url);
             const paths = decodedUrl.split('/');
-            const fullFileName = paths[paths.length - 1].split('?')[0]; // 去掉查询参数
-            name = fullFileName.substring(0, fullFileName.lastIndexOf('.'));
+            name = paths[paths.length - 1].split('?')[0]; // 去掉查询参数
         }
 
         // 提取扩展名
