@@ -69,6 +69,8 @@ let jPreview={
             this.error('资源不存在！');
             return;
         }
+        // 修改页面标题为 this.config.name
+        document.title = this.config.name + ' - view';
 
         const self = this;
 

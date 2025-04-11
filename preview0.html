@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ddddv2</title>
+    <link rel="stylesheet" href="static/common/css/main.css">
+    <link rel="stylesheet" href="static/common/css/audio.css">
+    <link rel="stylesheet" href="static/luckysheet/css/pluginsCss.css">
+    <link rel="stylesheet" href="static/luckysheet/css/plugins.css">
+    <link rel="stylesheet" href="static/luckysheet/css/luckysheet.css">
+    <link rel="stylesheet" href="static/luckysheet/css/iconfont.css">
+    <link rel="stylesheet" href="static/pptxjs/css/pptxjs.css">
+    <link rel="stylesheet" href="static/pptxjs/css/nv.d3.min.css">
+    <link rel="stylesheet" href="static/viewer/viewer.css">
+    <link rel="stylesheet" href="static/prism/prism.css">
+
+    <style>
+        /* 简单的动态圆圈加载 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .loading-circle {
+            border: 8px solid rgba(255, 255, 255, 0.2);
+            border-top: 8px solid #fff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <!-- 预览内容将在此容器内加载 -->
+</div>
+
+<!-- Loading 动态圆圈 -->
+<div id="loading" class="loading-overlay">
+    <div class="loading-circle"></div>
+</div>
+
+<script type="text/javascript" src="static/jquery-2.0.3.min.js"></script>
+<script type="text/javascript" src="static/jPreview.js"></script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // 资源加载完成后，移除 loading 动画
+        function hideLoading() {
+            document.getElementById("loading").style.display = "none";
+        }
+
+        // 使用 jPreview 预览插件
+        jPreview.preview({
+            container: "container", // 容器id
+            staticPath: "./static", // 静态资源路径
+            url: "", // 预览资源路径，没有的话获取url中scr参数
+            ext: "",  // 资源后缀，如果url中没有的话，必须传入后缀名，否则无法识别文件类型
+            name: "",  // 资源名称
+            watermarkSize: "", // 水印文字大小
+            priority: 1, // 优先级 1：使用插件预览 2：使用office在线预览，
+            oburl: "", // 可自动设置在线设置office线上预览地址，不需要的话可以不传
+        });
+        hideLoading();
+    });
+</script>
+
+</body>
+</html>
