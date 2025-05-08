@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ddddv2</title>
+    <link rel="stylesheet" href="static/common/css/main.css">
+    <link rel="stylesheet" href="static/common/css/audio.css">
+    <link rel="stylesheet" href="static/luckysheet/css/pluginsCss.css">
+    <link rel="stylesheet" href="static/luckysheet/css/plugins.css">
+    <link rel="stylesheet" href="static/luckysheet/css/luckysheet.css">
+    <link rel="stylesheet" href="static/luckysheet/css/iconfont.css">
+    <link rel="stylesheet" href="static/pptxjs/css/pptxjs.css">
+    <link rel="stylesheet" href="static/pptxjs/css/nv.d3.min.css">
+    <link rel="stylesheet" href="static/viewer/viewer.css">
+    <link rel="stylesheet" href="static/prism/prism.css">
+
+    <style>
+        /* 简单的动态圆圈加载 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+        }
+
+        .loading-circle {
+            border: 8px solid rgba(255, 255, 255, 0.2);
+            border-top: 8px solid #fff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .modal-box {
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+            text-align: center;
+            width: 300px;
+        }
+        .modal-box h2 { margin-bottom: 15px; font-size: 18px; color: #333; }
+        .modal-box input {
+            width: 100%; padding: 10px; margin: 10px 0 20px;
+            border: 1px solid #ccc; border-radius: 4px;
+        }
+        .modal-box button {
+            width: 100%; padding: 10px;
+            background: #007bff; border: none; color: #fff;
+            border-radius: 4px; cursor: pointer;
+        }
+        .modal-box button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <!-- 预览内容将在此容器内加载 -->
+</div>
+<div id="passwordModal" class="modal-overlay">
+  <div class="modal-box">
+    <h2>请输入提取码</h2>
+    <input type="password" id="passwordInput" placeholder="请输入提取码">
+    <button onclick="checkPassword()">确定</button>
+  </div>
+</div>
+
+<!-- Loading 动态圆圈 -->
+<div id="loading" class="loading-overlay">
+    <div class="loading-circle"></div>
+</div>
+
+<script type="text/javascript" src="static/jquery-2.0.3.min.js"></script>
+<script type="text/javascript" src="static/jPreview.js"></script>
+
+<script>
+
+    const xorKey = "key123";
+
+    // 对字符串进行 XOR 加密
+    function xorEncrypt(str, key) {
+        let result = "";
+        for (let i = 0; i < str.length; i++) {
+            result += String.fromCharCode(str.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+        }
+        return result;
+    }
+
+    // Base64 + XOR 加密
+    function encryptPassword(raw) {
+        const base64 = btoa(raw);
+        return btoa(xorEncrypt(base64, xorKey));
+    }
+
+    // 解密 Base64 + XOR 密码
+    function decryptPassword(encrypted) {
+        try {
+            const xorDecoded = atob(encrypted);
+            const base64 = xorEncrypt(xorDecoded, xorKey);
+            return atob(base64);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    const correctEncrypted = "MVcaAHxZDFA="; // 这是对 gg5689 加密后的字符串
+    const localKey = "verified_pass";
+
+    function checkPassword() {
+        const input = document.getElementById("passwordInput").value;
+        if (encryptPassword(input) === correctEncrypted) {
+            localStorage.setItem(localKey, correctEncrypted);
+            unlockPage();
+        } else {
+            alert("密码错误！");
+        }
+    }
+
+    function unlockPage() {
+        document.getElementById("passwordModal").style.display = "none";
+        document.body.style.display = "block";
+        initPreview();
+    }
+    // 页面加载时检测 localStorage
+    window.onload = function () {
+        const stored = localStorage.getItem(localKey);
+        if (stored && stored === correctEncrypted) {
+            unlockPage();
+        } else {
+            document.getElementById("passwordModal").style.display = "flex";
+        }
+    };
+
+
+    function initPreview() {
+        jPreview.preview({
+            container: "container",
+            staticPath: "./static",
+            url: "",
+            ext: "",
+            name: "",
+            watermarkSize: "",
+            priority: 1,
+            oburl: "",
+        });
+        document.getElementById("loading").style.display = "none";
+    }
+</script>
+
+</body>
+</html>
