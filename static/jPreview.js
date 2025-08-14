@@ -61,8 +61,8 @@ let jPreview={
             ext = spl[spl.length - 1].toLowerCase();
         }
 
-        this.config.ext = ext;
-        this.config.name = name;
+        this.config.name = this.config.name || name || '未命名文件';
+        this.config.ext = this.config.ext || ext || '';
 
         // 如果url为空，或者后缀为空，则提示资源不存在
         if (!url || !ext) {
