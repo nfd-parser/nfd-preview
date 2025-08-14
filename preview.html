@@ -29,7 +29,7 @@
 <script type="text/javascript" src="static/jquery-2.0.3.min.js"></script>
 <script type="text/javascript" src="https://unpkg.com/vue@2.7.14/dist/vue.js"></script>
 <script src="https://unpkg.com/element-ui@2.15.13/lib/index.js"></script>
-<script type="text/javascript" src="static/jPreview.js"></script>
+<script type="text/javascript" src="static/jPreview.js?v2"></script>
 <script>
 	var app = new Vue({
 		delimiters: ['${', '}'],
@@ -46,13 +46,19 @@
 				spinner: 'el-icon-loading',
 				background: 'rgba(0, 0, 0, 0.9)'
 			});
+            // 获取url中的src/url参数和ext参数
+            const urlParams = new URLSearchParams(window.location.search);
+            const src = urlParams.get('src') || urlParams.get('url') || '';
+            const ext = urlParams.get('ext') || '';
+            const name = urlParams.get('name') || '';
+
 			this.$nextTick(function(){
 				jPreview.preview({
 					container:"container", // 容器id
 					staticPath:"./static", // 静态资源路径
-					url:"", // 预览资源路径，没有的话获取url中scr参数
-					ext:"",  // 资源后缀，如果url中没有的话，必须传入后缀名，否则无法识别文件类型
-					name:"",  // 资源名称
+					url: src, // 预览资源路径，没有的话获取url中scr参数
+					ext: ext,  // 资源后缀，如果url中没有的话，必须传入后缀名，否则无法识别文件类型
+					name: name,  // 资源名称
 					// watermarkTxt:"文件预览系统", // 水印文字
 					watermarkSize:"", // 水印文字大小
 					priority:1, // 优先级 1：使用插件预览 2：使用office在线预览，
