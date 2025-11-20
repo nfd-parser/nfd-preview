@@ -112,7 +112,7 @@ let jPreview={
         let pptExt=['pptx'];
         let xlsExt=['xls','xlsx','csv'];
         let olExt=["doc","docx","docm","dot","dotx","dotm","rtf","xls","xlsx","xlt","xlsb","xlsm","csv","ppt","pptx","pps","ppsx","pptm","potm","ppam","potx","ppsm","odt","ods","odp","ott","ots","otp","wps","wpt"];
-        const sourceCodeExt = ['js', 'html', 'css', 'java', 'py', 'c', 'cpp', 'json', 'xml'];
+        const sourceCodeExt = ['js', 'html', 'css', 'java', 'py', 'c', 'cpp', 'json', 'xml', 'sh'];
         const markdownExt = ['md'];
 
 
