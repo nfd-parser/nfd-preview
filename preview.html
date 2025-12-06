@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-  <meta name="referrer" content="no-referrer">
 	<meta charset="UTF-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -40,32 +39,69 @@
 			};
 		},
 		created(){
+			// 简单的来源验证
+			if (!this.checkAccess()) {
+				document.getElementById('container').innerHTML = 
+					'<div style="text-align:center;padding:100px;color:#999;font-size:16px;">⚠️ 请通过正常途径访问</div>';
+				return;
+			}
+
 			const loading = this.$loading({
 				lock: true,
 				text: '资源加载中...',
 				spinner: 'el-icon-loading',
 				background: 'rgba(0, 0, 0, 0.9)'
 			});
-            // 获取url中的src/url参数和ext参数
-            const urlParams = new URLSearchParams(window.location.search);
-            const src = urlParams.get('src') || urlParams.get('url') || '';
-            const ext = urlParams.get('ext') || '';
-            const name = urlParams.get('name') || '';
+			// 获取url中的src/url参数和ext参数
+			const urlParams = new URLSearchParams(window.location.search);
+			const src = urlParams.get('src') || urlParams.get('url') || '';
+			const ext = urlParams.get('ext') || '';
+			const name = urlParams.get('name') || '';
 
 			this.$nextTick(function(){
 				jPreview.preview({
-					container:"container", // 容器id
-					staticPath:"./static", // 静态资源路径
-					url: src, // 预览资源路径，没有的话获取url中scr参数
-					ext: ext,  // 资源后缀，如果url中没有的话，必须传入后缀名，否则无法识别文件类型
-					name: name,  // 资源名称
-					// watermarkTxt:"文件预览系统", // 水印文字
-					watermarkSize: "", // 水印文字大小
-					priority: 1, // 优先级 1：使用插件预览 2：使用office在线预览，
-					oburl: "", // 可自动设置在线设置office线上预览地址，不需要的话可以不传
+					container:"container",
+					staticPath:"./static",
+					url: src,
+					ext: ext,
+					name: name,
+					watermarkSize: "",
+					priority: 1,
+					oburl: "",
 				});
 				loading.close();
 			})
+		},
+		methods: {
+			checkAccess() {
+				const AUTH_KEY = 'pv_auth';
+				const referrer = document.referrer;
+				
+				// 检查 referrer 是否同源
+				if (referrer) {
+					try {
+						const refOrigin = new URL(referrer).origin;
+						const curOrigin = window.location.origin;
+						if (refOrigin === curOrigin) {
+							// 同源访问，设置 sessionStorage 标记（支持刷新）
+							sessionStorage.setItem(AUTH_KEY, Date.now().toString());
+							return true;
+						}
+					} catch (e) {}
+				}
+				
+				// 检查 sessionStorage 标记（允许刷新页面）
+				const authTime = sessionStorage.getItem(AUTH_KEY);
+				if (authTime) {
+				// 标记有效期 2 小时
+				if (Date.now() - parseInt(authTime) < 2 * 60 * 60 * 1000) {
+						return true;
+					}
+					sessionStorage.removeItem(AUTH_KEY);
+				}
+				
+				return false;
+			}
 		}
 	})
 	</script>
