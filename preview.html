@@ -78,17 +78,17 @@
 				const referrer = document.referrer;
 				
 				// 检查 referrer 是否同源
-				if (referrer) {
-					try {
-						const refOrigin = new URL(referrer).origin;
-						const curOrigin = window.location.origin;
-						if (refOrigin === curOrigin) {
-							// 同源访问，设置 sessionStorage 标记（支持刷新）
-							sessionStorage.setItem(AUTH_KEY, Date.now().toString());
-							return true;
-						}
-					} catch (e) {}
-				}
+                if (referrer) {
+                    try {
+                        const refHost = new URL(referrer).hostname;
+                        const curHost = window.location.hostname;
+                        if (refHost === curHost || curHost === '127.0.0.1' || curHost === 'localhost') {
+                            // 同源访问，设置 sessionStorage 标记（支持刷新）
+                            sessionStorage.setItem(AUTH_KEY, Date.now().toString());
+                            return true;
+                        }
+                    } catch (e) {}
+                }
 				
 				// 检查 sessionStorage 标记（允许刷新页面）
 				const authTime = sessionStorage.getItem(AUTH_KEY);
