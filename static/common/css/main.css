@@ -635,3 +635,34 @@ body{
         padding:30px !important;
     }
 }
+
+/* 代码预览样式增强 - 配合 Prism.js */
+.source-code-preview {
+    background: #282c34 !important;
+    min-height: 100vh;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: auto;
+}
+
+.source-code-preview pre {
+    background: #282c34 !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    border-radius: 0 !important;
+    overflow-x: auto;
+    tab-size: 4;
+}
+
+.source-code-preview code {
+    font-family: 'Consolas', 'Monaco', 'Courier New', 'Menlo', monospace !important;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+    display: block !important;
+    white-space: pre !important;
+}
+
+/* Prism.js 行号插件样式 */
+.line-numbers .line-numbers-rows {
+    border-right: 1px solid #4b5263 !important;
+}

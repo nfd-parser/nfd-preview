@@ -112,7 +112,14 @@ let jPreview={
         let pptExt=['pptx'];
         let xlsExt=['xls','xlsx','csv'];
         let olExt=["doc","docx","docm","dot","dotx","dotm","rtf","xls","xlsx","xlt","xlsb","xlsm","csv","ppt","pptx","pps","ppsx","pptm","potm","ppam","potx","ppsm","odt","ods","odp","ott","ots","otp","wps","wpt"];
-        const sourceCodeExt = ['js', 'html', 'css', 'java', 'py', 'c', 'cpp', 'json', 'xml', 'sh'];
+        const sourceCodeExt = [
+            'js', 'ts', 'jsx', 'tsx', 'vue', 'html', 'css', 'scss', 'sass', 'less', 
+            'java', 'py', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'php', 'rb', 'swift', 'kt', 'scala',
+            'json', 'xml', 'yaml', 'yml', 'toml', 'ini', 'conf', 'properties',
+            'sh', 'bash', 'zsh', 'fish', 'ps1', 'bat', 'cmd',
+            'sql', 'gradle', 'maven', 'dockerfile', 'makefile',
+            'log', 'txt', 'env'
+        ];
         const markdownExt = ['md'];
 
 
@@ -516,17 +523,99 @@ let jPreview={
         });
     },
     audioView(url){
-        $('#'+this.config.container).html('<div class="yAudio" id="yAudio"></div>');
-        new YAudio({
-            element: document.querySelector('#yAudio'),
-            audio: {
-                "title": this.config.name,
-                "url": url
+        const self = this;
+        const container = this.config.container;
+        
+        // 先尝试使用 YAudio 播放器
+        $('#' + container).html('<div class="yAudio" id="yAudio"></div>');
+        
+        try {
+            const player = new YAudio({
+                element: document.querySelector('#yAudio'),
+                audio: {
+                    "title": this.config.name,
+                    "url": url
+                }
+            });
+            
+            // 监听音频加载错误，降级到原生 audio 标签
+            const audioElement = document.querySelector('#yAudio audio');
+            if (audioElement) {
+                audioElement.addEventListener('error', function(e) {
+                    console.warn('YAudio 加载失败，降级到原生 audio 标签', e);
+                    self.fallbackToNativeAudio(url, container);
+                }, {once: true});
             }
-        })
+        } catch (error) {
+            console.error('YAudio 初始化失败，使用原生 audio 标签', error);
+            this.fallbackToNativeAudio(url, container);
+        }
+    },
+    
+    // 降级到原生 audio 标签播放
+    fallbackToNativeAudio(url, container) {
+        const audioHtml = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); max-width: 500px; width: 90%;">
+                    <h3 style="margin: 0 0 20px 0; color: #333; font-size: 18px; text-align: center;">${this.config.name}</h3>
+                    <audio controls crossorigin="anonymous" style="width: 100%; outline: none;">
+                        <source src="${url}" type="audio/mpeg">
+                        <source src="${url}" type="audio/ogg">
+                        <source src="${url}" type="audio/wav">
+                        您的浏览器不支持音频播放
+                    </audio>
+                    <p style="margin: 15px 0 0 0; color: #666; font-size: 12px; text-align: center;">正在使用原生播放器</p>
+                </div>
+            </div>
+        `;
+        $('#' + container).html(audioHtml);
     },
     sourceCodeView(url, ext) {
-        $("body").html("<div class='source-code-preview'><pre><code id='file-content' class='language-" + ext + " line-numbers'></code></pre></div>");
+        // 语言映射表（Prism.js 语言名称）
+        const langMap = {
+            'js': 'javascript',
+            'mjs': 'javascript',
+            'ts': 'typescript',
+            'tsx': 'tsx',
+            'jsx': 'jsx',
+            'py': 'python',
+            'cpp': 'cpp',
+            'c': 'c',
+            'java': 'java',
+            'html': 'markup',
+            'htm': 'markup',
+            'xml': 'markup',
+            'svg': 'markup',
+            'css': 'css',
+            'scss': 'scss',
+            'sass': 'sass',
+            'less': 'less',
+            'json': 'json',
+            'yml': 'yaml',
+            'yaml': 'yaml',
+            'md': 'markdown',
+            'markdown': 'markdown',
+            'sh': 'bash',
+            'bash': 'bash',
+            'sql': 'sql',
+            'go': 'go',
+            'rs': 'rust',
+            'rust': 'rust',
+            'php': 'php',
+            'rb': 'ruby',
+            'swift': 'swift',
+            'kt': 'kotlin',
+            'r': 'r'
+        };
+        const language = langMap[ext] || ext;
+        
+        // 创建代码预览容器（使用 Prism.js 类名）
+        $("body").html(`
+            <div class='source-code-preview'>
+                <pre class='line-numbers'><code id='file-content' class='language-${language}'></code></pre>
+            </div>
+        `);
+        
         fetch(url)
             .then(response => {
                 if (!response.ok) {
@@ -535,23 +624,19 @@ let jPreview={
                 return response.text();
             })
             .then(code => {
-                document.getElementById('file-content').textContent = code;
-                dynamicLoadJs(this.config.staticPath + "/prism/prism.js", () => {
-                    Prism.plugins.toolbar.registerButton('copy-to-clipboard', function (env) {
-                        const button = document.createElement('button');
-                        button.textContent = '复制';
-
-                        button.addEventListener('click', function () {
-                            navigator.clipboard.writeText(env.code).then(function () {
-                                button.textContent = '已复制';
-                                setTimeout(function () { button.textContent = '复制'; }, 2000);
-                            });
-                        });
-
-                        return button;
-                    });
-                    Prism.highlightAll();
-                });
+                const codeElement = document.getElementById('file-content');
+                codeElement.textContent = code;
+                
+                // 使用 Prism.js 进行高亮
+                if (typeof Prism !== 'undefined') {
+                    // 确保在 DOM 更新后执行高亮
+                    setTimeout(() => {
+                        Prism.highlightElement(codeElement);
+                        console.log('✅ Prism.js 高亮完成，语言: ' + language);
+                    }, 50);
+                } else {
+                    console.warn('⚠️ Prism.js 未加载');
+                }
             })
             .catch(error => {
                 console.error('获取文件内容时出错:', error);
