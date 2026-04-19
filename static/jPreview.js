@@ -135,9 +135,16 @@ let jPreview={
             })
 
         }else if($.inArray(ext,videoExt)>=0){
-            dynamicLoadJs(static+"/common/js/DPlayer.min.js",function(){
-                self.videoView(url);
-            })
+            var loadPlayer = function(){
+                dynamicLoadJs(static+"/common/js/DPlayer.min.js",function(){
+                    self.videoView(url);
+                })
+            };
+            if(ext === 'flv'){
+                dynamicLoadJs(static+"/common/js/flv.min.js",function(){ loadPlayer(); })
+            } else {
+                loadPlayer();
+            }
         }else if($.inArray(ext,docExt)>=0 && this.config.priority == 1){
             dynamicLoadJs(static+"/docxjs/js/jszip.min.js",function(){
                 dynamicLoadJs(static+"/docxjs/js/docx-preview.js",function(){
