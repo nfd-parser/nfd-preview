@@ -530,33 +530,8 @@ let jPreview={
         });
     },
     audioView(url){
-        const self = this;
         const container = this.config.container;
-        
-        // 先尝试使用 YAudio 播放器
-        $('#' + container).html('<div class="yAudio" id="yAudio"></div>');
-        
-        try {
-            const player = new YAudio({
-                element: document.querySelector('#yAudio'),
-                audio: {
-                    "title": this.config.name,
-                    "url": url
-                }
-            });
-            
-            // 监听音频加载错误，降级到原生 audio 标签
-            const audioElement = document.querySelector('#yAudio audio');
-            if (audioElement) {
-                audioElement.addEventListener('error', function(e) {
-                    console.warn('YAudio 加载失败，降级到原生 audio 标签', e);
-                    self.fallbackToNativeAudio(url, container);
-                }, {once: true});
-            }
-        } catch (error) {
-            console.error('YAudio 初始化失败，使用原生 audio 标签', error);
-            this.fallbackToNativeAudio(url, container);
-        }
+        this.fallbackToNativeAudio(url, container);
     },
     
     // 降级到原生 audio 标签播放
@@ -565,13 +540,12 @@ let jPreview={
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                 <div style="background: white; border-radius: 12px; padding: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); max-width: 500px; width: 90%;">
                     <h3 style="margin: 0 0 20px 0; color: #333; font-size: 18px; text-align: center;">${this.config.name}</h3>
-                    <audio controls crossorigin="anonymous" style="width: 100%; outline: none;">
+                    <audio controls preload="metadata" style="width: 100%; outline: none;">
                         <source src="${url}" type="audio/mpeg">
                         <source src="${url}" type="audio/ogg">
                         <source src="${url}" type="audio/wav">
                         您的浏览器不支持音频播放
                     </audio>
-                    <p style="margin: 15px 0 0 0; color: #666; font-size: 12px; text-align: center;">正在使用原生播放器</p>
                 </div>
             </div>
         `;
