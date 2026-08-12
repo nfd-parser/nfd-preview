@@ -4,6 +4,7 @@ let jPreview={
         staticPath:"./static", // 静态资源路径
         url:"", // 预览资源路径
         ext:"",  // 资源后缀
+        mode:"", // html: preview=渲染预览；其他值=源码高亮
         name:"",  // 资源名称
         watermarkTxt:"", // 水印文字
         watermarkSize:"16px", // 水印文字大小
@@ -113,7 +114,7 @@ let jPreview={
         let xlsExt=['xls','xlsx','csv'];
         let olExt=["doc","docx","docm","dot","dotx","dotm","rtf","xls","xlsx","xlt","xlsb","xlsm","csv","ppt","pptx","pps","ppsx","pptm","potm","ppam","potx","ppsm","odt","ods","odp","ott","ots","otp","wps","wpt"];
         const sourceCodeExt = [
-            'js', 'ts', 'jsx', 'tsx', 'vue', 'html', 'css', 'scss', 'sass', 'less', 
+            'js', 'ts', 'jsx', 'tsx', 'vue', 'css', 'scss', 'sass', 'less',
             'java', 'py', 'go', 'rs', 'c', 'cpp', 'h', 'hpp', 'cs', 'php', 'rb', 'swift', 'kt', 'scala',
             'json', 'xml', 'yaml', 'yml', 'toml', 'ini', 'conf', 'properties',
             'sh', 'bash', 'zsh', 'fish', 'ps1', 'bat', 'cmd',
@@ -121,6 +122,7 @@ let jPreview={
             'log', 'txt', 'env'
         ];
         const markdownExt = ['md'];
+        const htmlExt = ['html', 'htm'];
 
 
         if($.inArray(ext,imgExt)>=0){
@@ -179,6 +181,13 @@ let jPreview={
             self.olView(url);
         }else if($.inArray(ext,txtExt)>=0){
             self.txtView(url);
+        } else if (htmlExt.includes(ext)) {
+            // 仅显式请求渲染预览时执行 HTML，其他情况默认展示源码。
+            if (this.config.mode === 'preview') {
+                this.htmlView(url);
+            } else {
+                this.sourceCodeView(url, ext);
+            }
         } else if (sourceCodeExt.includes(ext)) {
             this.sourceCodeView(url, ext);
         } else if (markdownExt.includes(ext)) {
@@ -186,6 +195,58 @@ let jPreview={
         } else {
             this.error('不支持的文件类型!');
         }
+    },
+    /**
+     * HTML 预览：fetch 文本 → blob URL → 沙箱 iframe（绕过 attachment 强制下载）
+     * sandbox 不含 allow-same-origin，避免在预览域执行任意脚本时可读写父页 Cookie。
+     */
+    htmlView(url){
+        $("body").html(
+            "<div id='html-preview-wrap' style='position:absolute;inset:0;background:#fff'>" +
+            "<div id='html-preview-status' style='padding:12px 16px;color:#666;font:14px/1.5 sans-serif'>正在加载 HTML…</div>" +
+            "<iframe id='html-preview-frame' sandbox='allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-top-navigation-by-user-activation allow-top-navigation' " +
+            "style='display:none;width:100%;height:100%;border:0;position:absolute;left:0;top:0'></iframe>" +
+            "</div>"
+        );
+        const statusEl = document.getElementById('html-preview-status');
+        const frame = document.getElementById('html-preview-frame');
+        fetch(url, { mode: 'cors', credentials: 'omit' })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+                return response.text();
+            })
+            .then(html => {
+                let doc = html || '';
+                // 相对资源（css/img）按原直链目录解析；已有 <base> 则不重复插入
+                try {
+                    const u = new URL(url, window.location.href);
+                    const baseHref = u.href.replace(/[#?].*$/, '').replace(/[^/]+$/, '');
+                    if (baseHref && !/<base\s/i.test(doc)) {
+                        if (/<head[^>]*>/i.test(doc)) {
+                            doc = doc.replace(/<head[^>]*>/i, m => m + '\n<base href="' + baseHref + '">');
+                        } else {
+                            doc = '<base href="' + baseHref + '">\n' + doc;
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+                const blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
+                const blobUrl = URL.createObjectURL(blob);
+                frame.onload = function () {
+                    try { URL.revokeObjectURL(blobUrl); } catch (e) { /* ignore */ }
+                };
+                statusEl.style.display = 'none';
+                frame.style.display = 'block';
+                frame.src = blobUrl;
+            })
+            .catch(error => {
+                console.error('HTML 预览失败:', error);
+                statusEl.innerHTML =
+                    '无法预览该 HTML（' + (error && error.message ? error.message : error) + '）。' +
+                    '若直链禁止跨域，请走服务端代理后再预览。<br>' +
+                    '<a href="' + url.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener">尝试直接打开/下载</a>';
+            });
     },
     txtView(url){
         $("body").html("<div class='text-preview'><pre id='file-content'></pre><div>");

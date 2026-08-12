@@ -32,7 +32,7 @@
 <script src="https://unpkg.com/element-ui@2.15.13/lib/index.js"></script>
 <!-- Prism.js - 代码高亮 -->
 <script src="static/prism/prism.js"></script>
-<script type="text/javascript" src="static/jPreview.js?v3"></script>
+<script type="text/javascript" src="static/jPreview.js?v5"></script>
 <script>
 	var app = new Vue({
 		delimiters: ['${', '}'],
@@ -56,11 +56,12 @@
 				spinner: 'el-icon-loading',
 				background: 'rgba(0, 0, 0, 0.9)'
 			});
-			// 获取url中的src/url参数和ext参数
+			// 获取url中的src/url参数和ext参数；mode=preview 时渲染 HTML
 			const urlParams = new URLSearchParams(window.location.search);
 			const src = urlParams.get('src') || urlParams.get('url') || '';
 			const ext = urlParams.get('ext') || '';
 			const name = urlParams.get('name') || '';
+			const mode = urlParams.get('mode') || '';
 
 			this.$nextTick(function(){
 				jPreview.preview({
@@ -69,6 +70,7 @@
 					url: src,
 					ext: ext,
 					name: name,
+					mode: mode,
 					watermarkSize: "",
 					priority: 1,
 					oburl: "",
