@@ -636,7 +636,9 @@ body{
     }
 }
 
-/* 代码预览样式增强 - 配合 Prism.js */
+/* 代码预览样式增强 - 配合 Prism.js
+   prism.css 用的是浅色主题（黑字 + 白色 text-shadow），这里容器是深色底，
+   必须把字色/阴影/token 配色一并覆盖成深色主题，否则黑字压深底完全看不清 */
 .source-code-preview {
     background: #282c34 !important;
     min-height: 100vh;
@@ -645,8 +647,14 @@ body{
     overflow: auto;
 }
 
-.source-code-preview pre {
+.source-code-preview pre[class*="language-"],
+.source-code-preview code[class*="language-"] {
+    color: #abb2bf !important;
+    text-shadow: none !important;
     background: #282c34 !important;
+}
+
+.source-code-preview pre {
     margin: 0 !important;
     padding: 20px !important;
     border-radius: 0 !important;
@@ -662,7 +670,65 @@ body{
     white-space: pre !important;
 }
 
+.source-code-preview ::selection,
+.source-code-preview ::-moz-selection {
+    text-shadow: none;
+    background: #3e4451;
+}
+
+/* token 深色配色（One Dark） */
+.source-code-preview .token.comment,
+.source-code-preview .token.prolog,
+.source-code-preview .token.doctype,
+.source-code-preview .token.cdata {
+    color: #5c6370 !important;
+    font-style: italic;
+}
+.source-code-preview .token.punctuation {
+    color: #abb2bf !important;
+}
+.source-code-preview .token.property,
+.source-code-preview .token.tag,
+.source-code-preview .token.boolean,
+.source-code-preview .token.number,
+.source-code-preview .token.constant,
+.source-code-preview .token.symbol,
+.source-code-preview .token.deleted {
+    color: #d19a66 !important;
+}
+.source-code-preview .token.selector,
+.source-code-preview .token.attr-name,
+.source-code-preview .token.string,
+.source-code-preview .token.char,
+.source-code-preview .token.builtin,
+.source-code-preview .token.inserted {
+    color: #98c379 !important;
+}
+.source-code-preview .token.operator,
+.source-code-preview .token.entity,
+.source-code-preview .token.url {
+    color: #56b6c2 !important;
+    background: none !important;
+}
+.source-code-preview .token.atrule,
+.source-code-preview .token.attr-value,
+.source-code-preview .token.keyword {
+    color: #c678dd !important;
+}
+.source-code-preview .token.function,
+.source-code-preview .token.class-name {
+    color: #61afef !important;
+}
+.source-code-preview .token.regex,
+.source-code-preview .token.important,
+.source-code-preview .token.variable {
+    color: #e06c75 !important;
+}
+
 /* Prism.js 行号插件样式 */
-.line-numbers .line-numbers-rows {
+.source-code-preview .line-numbers .line-numbers-rows {
     border-right: 1px solid #4b5263 !important;
+}
+.source-code-preview .line-numbers-rows > span:before {
+    color: #636d83 !important;
 }

@@ -197,6 +197,22 @@ let jPreview={
         }
     },
     /**
+     * 按内容识别编码读取文本：BOM > 响应头 charset > UTF-8 校验 > GBK
+     * 直链多为 application/octet-stream，response.text() 一律按 UTF-8 解码会导致 GBK 文件乱码
+     */
+    fetchText(url, options){
+        return fetch(url, options).then(function(response){
+            if (!response.ok) {
+                throw new Error('网络响应错误 HTTP ' + response.status);
+            }
+            var ct = response.headers.get('content-type') || '';
+            var matched = ct.match(/charset=\s*"?([\w-]+)/i);
+            return response.arrayBuffer().then(function(buffer){
+                return utils.decodeText(buffer, matched && matched[1]);
+            });
+        });
+    },
+    /**
      * HTML 预览：fetch 文本 → blob URL → 沙箱 iframe（绕过 attachment 强制下载）
      * sandbox 不含 allow-same-origin，避免在预览域执行任意脚本时可读写父页 Cookie。
      */
@@ -210,13 +226,7 @@ let jPreview={
         );
         const statusEl = document.getElementById('html-preview-status');
         const frame = document.getElementById('html-preview-frame');
-        fetch(url, { mode: 'cors', credentials: 'omit' })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('HTTP ' + response.status);
-                }
-                return response.text();
-            })
+        this.fetchText(url, { mode: 'cors', credentials: 'omit' })
             .then(html => {
                 let doc = html || '';
                 // 相对资源（css/img）按原直链目录解析；已有 <base> 则不重复插入
@@ -251,13 +261,7 @@ let jPreview={
     txtView(url){
         $("body").html("<div class='text-preview'><pre id='file-content'></pre><div>");
         // 使用fetch API获取文件内容
-        fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('网络响应错误');
-                }
-                return response.text();
-            })
+        this.fetchText(url)
             .then(text => {
                 // 将获取到的文本内容放入<pre>元素中
                 document.getElementById('file-content').textContent = text;
@@ -647,24 +651,38 @@ let jPreview={
             'rb': 'ruby',
             'swift': 'swift',
             'kt': 'kotlin',
-            'r': 'r'
+            'r': 'r',
+            'h': 'c',
+            'hpp': 'cpp',
+            'cs': 'csharp',
+            'vue': 'markup',
+            'bat': 'batch',
+            'cmd': 'batch',
+            'ps1': 'powershell',
+            'zsh': 'bash',
+            'fish': 'bash',
+            'env': 'bash',
+            'conf': 'ini',
+            'toml': 'toml',
+            'ini': 'ini',
+            'properties': 'properties',
+            'log': 'log',
+            'dockerfile': 'docker',
+            'makefile': 'makefile',
+            'gradle': 'gradle'
         };
-        const language = langMap[ext] || ext;
+        // Prism 不认识的语言退回 none，避免套用错误的语法规则
+        const mapped = langMap[ext] || ext;
+        const language = (typeof Prism !== 'undefined' && !Prism.languages[mapped]) ? 'none' : mapped;
         
         // 创建代码预览容器（使用 Prism.js 类名）
         $("body").html(`
             <div class='source-code-preview'>
-                <pre class='line-numbers'><code id='file-content' class='language-${language}'></code></pre>
+                <pre class='line-numbers language-${language}'><code id='file-content' class='language-${language}'></code></pre>
             </div>
         `);
         
-        fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('网络响应错误');
-                }
-                return response.text();
-            })
+        this.fetchText(url)
             .then(code => {
                 const codeElement = document.getElementById('file-content');
                 codeElement.textContent = code;
@@ -688,13 +706,7 @@ let jPreview={
 
     markdownView(url) {
         $("body").html("<div class='markdown-preview' style='padding: 20px; max-width: 800px; margin: auto; background-color: #f5f5f5; border-radius: 8px;'><div id='markdown-content'></div></div>");
-        fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('网络响应错误');
-                }
-                return response.text();
-            })
+        this.fetchText(url)
             .then(markdown => {
                 dynamicLoadJs(this.config.staticPath + "/marked/marked.min.js", () => {
                     if (typeof marked.parse === 'function') {
@@ -795,6 +807,26 @@ function dynamicLoadJs(url, callback) {
 
 // 工具函数
 var utils = {
+    // 按 BOM / 响应头 charset / UTF-8 校验的顺序解码文本，识别不出 UTF-8 时按 GBK 处理
+    decodeText: function (buffer, charset) {
+        var bytes = new Uint8Array(buffer);
+        if (bytes.length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF) {
+            return new TextDecoder('utf-8').decode(bytes.subarray(3));
+        }
+        if (bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE) {
+            return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+        }
+        if (bytes.length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF) {
+            return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+        }
+        // 直链常缺失 charset 或统一写死 utf-8，内容校验通过就按 UTF-8，否则用声明的编码兜底到 gbk
+        var code = this.isUTF8(bytes) ? 'utf-8' : ((charset || 'gbk').toLowerCase());
+        try {
+            return new TextDecoder(code).decode(bytes);
+        } catch (e) {
+            return new TextDecoder('utf-8').decode(bytes);
+        }
+    },
     isUTF8: function (bytes) {
         var i = 0;
         while (i < bytes.length) {
