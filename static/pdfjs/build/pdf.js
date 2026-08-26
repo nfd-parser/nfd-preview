@@ -14214,6 +14214,17 @@ var display_utils = __webpack_require__(473);
 
 
 
+// 跨域直链几乎都不会 expose Accept-Ranges —— 它不在 CORS 安全响应头白名单里，
+// getResponseHeader 只能读到 null，pdf.js 会据此误判为「不支持分段」而整包下载。
+// jPreview 在打开 viewer 前会自己发一次 Range 探测请求，确认返回 206 才在地址上带 jprange=1。
+function isRangeForcedByViewer() {
+  try {
+    return typeof location !== "undefined" &&
+      new URLSearchParams(location.search).get("jprange") === "1";
+  } catch {
+    return false;
+  }
+}
 function validateRangeRequestCapabilities({
   getResponseHeader,
   isHttp,
@@ -14235,7 +14246,7 @@ function validateRangeRequestCapabilities({
   if (disableRange || !isHttp) {
     return returnValues;
   }
-  if (getResponseHeader("Accept-Ranges") !== "bytes") {
+  if (getResponseHeader("Accept-Ranges") !== "bytes" && !isRangeForcedByViewer()) {
     return returnValues;
   }
   const contentEncoding = getResponseHeader("Content-Encoding") || "identity";

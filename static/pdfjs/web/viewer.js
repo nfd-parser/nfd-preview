@@ -4445,7 +4445,7 @@ const defaultOptions = {
     kind: OptionKind.API
   },
   disableAutoFetch: {
-    value: false,
+    value: true,
     kind: OptionKind.API + OptionKind.PREFERENCE
   },
   disableFontFace: {
@@ -4457,7 +4457,7 @@ const defaultOptions = {
     kind: OptionKind.API + OptionKind.PREFERENCE
   },
   disableStream: {
-    value: false,
+    value: true,
     kind: OptionKind.API + OptionKind.PREFERENCE
   },
   docBaseUrl: {
@@ -12660,10 +12660,10 @@ class BasePreferences {
     "spreadModeOnLoad": -1,
     "textLayerMode": 1,
     "viewOnLoad": 0,
-    "disableAutoFetch": false,
+    "disableAutoFetch": true,
     "disableFontFace": false,
     "disableRange": false,
-    "disableStream": false,
+    "disableStream": true,
     "enableXfa": true,
     "viewerCssTheme": 0
   });
