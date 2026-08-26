@@ -6,18 +6,55 @@
 	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>文件预览插件</title>
+	<!--
+	  只保留所有文件类型都要用的样式。viewer / luckysheet / pptxjs / prism / audio 的 CSS
+	  改为在 jPreview 识别出文件类型后按需加载（dynamicLoadCss），避免预览一张 jpg
+	  也要先下 300KB 用不上的表格样式。
+	-->
 	<link rel="stylesheet" href="static/common/css/main.css">
-	<link rel="stylesheet" href="https://unpkg.com/element-ui@2.15.13/lib/theme-chalk/index.css">
-	<link rel="stylesheet" href="static/common/css/audio.css">
-	<link rel="stylesheet" href="static/luckysheet/css/pluginsCss.css">
-	<link rel="stylesheet" href="static/luckysheet/css/plugins.css">
-	<link rel="stylesheet" href="static/luckysheet/css/luckysheet.css">
-	<link rel="stylesheet" href="static/luckysheet/css/iconfont.css">
-	<link rel="stylesheet" href="static/pptxjs/css/pptxjs.css">
-	<link rel="stylesheet" href="static/pptxjs/css/nv.d3.min.css">
-	<link rel="stylesheet" href="static/viewer/viewer.css">
-	<!-- Prism.js - 代码高亮样式 -->
-	<link rel="stylesheet" href="static/prism/prism.css">
+	<style>
+		/* 载入浮层：内联在首屏，保证 main.css 未到达时进度也能立刻显示 */
+		html, body { margin: 0; padding: 0; height: 100%; }
+		#jp-loading {
+			position: fixed; inset: 0; z-index: 99999;
+			display: flex; align-items: center; justify-content: center;
+			background: #0f172a;
+			font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+			color: #e2e8f0;
+		}
+		#jp-loading.jp-hidden { display: none; }
+		.jp-loading-card { width: min(420px, calc(100vw - 48px)); text-align: center; }
+		.jp-loading-name {
+			font-size: 15px; font-weight: 600; color: #f1f5f9; margin-bottom: 18px;
+			overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+		}
+		.jp-loading-bar {
+			height: 6px; border-radius: 3px; background: rgba(148, 163, 184, 0.25); overflow: hidden;
+		}
+		.jp-loading-fill {
+			height: 100%; width: 0; border-radius: 3px;
+			background: linear-gradient(90deg, #38bdf8, #6366f1);
+			transition: width 0.2s ease;
+		}
+		/* 拿不到 Content-Length 时退化成来回滚动的不确定进度条 */
+		.jp-loading-bar.jp-indeterminate .jp-loading-fill {
+			width: 35%; transition: none; animation: jp-slide 1.1s ease-in-out infinite;
+		}
+		@keyframes jp-slide {
+			0% { margin-left: -35%; }
+			100% { margin-left: 100%; }
+		}
+		.jp-loading-stats {
+			margin-top: 12px; font-size: 13px; color: #94a3b8;
+			font-variant-numeric: tabular-nums;
+			display: flex; align-items: center; justify-content: center;
+			flex-wrap: wrap; gap: 4px 10px;
+		}
+		.jp-loading-percent { color: #f1f5f9; font-weight: 600; font-size: 15px; }
+		.jp-loading-speed { color: #38bdf8; }
+		.jp-loading-error { color: #fca5a5; margin-top: 14px; font-size: 13px; }
+		.jp-loading-error a { color: #7dd3fc; }
+	</style>
 </head>
 <body>
 <div id="el-app">
@@ -25,91 +62,38 @@
 	</div>
 </div>
 
-<!-- built files will be auto injected -->
+<div id="jp-loading">
+	<div class="jp-loading-card">
+		<div class="jp-loading-name" id="jp-loading-name">资源加载中…</div>
+		<div class="jp-loading-bar jp-indeterminate" id="jp-loading-bar"><div class="jp-loading-fill" id="jp-loading-fill"></div></div>
+		<div class="jp-loading-stats" id="jp-loading-stats"><span>正在连接…</span></div>
+		<div class="jp-loading-error" id="jp-loading-error" style="display:none"></div>
+	</div>
+</div>
 
 <script type="text/javascript" src="static/jquery-2.0.3.min.js"></script>
-<script type="text/javascript" src="https://unpkg.com/vue@2.7.14/dist/vue.js"></script>
-<script src="https://unpkg.com/element-ui@2.15.13/lib/index.js"></script>
-<!-- Prism.js - 代码高亮 -->
-<script src="static/prism/prism.js"></script>
-<script type="text/javascript" src="static/jPreview.js?v5"></script>
+<script type="text/javascript" src="static/jPreview.js?v6"></script>
 <script>
-	var app = new Vue({
-		delimiters: ['${', '}'],
-		el: '#el-app',
-		data(){
-			return {
-				loading: true,
-			};
-		},
-		created(){
-			// 简单的来源验证
-			// if (!this.checkAccess()) {
-			// 	document.getElementById('container').innerHTML = 
-			// 		'<div style="text-align:center;padding:100px;color:#999;font-size:16px;">⚠️ 请通过正常途径访问</div>';
-			// 	return;
-			// }
+	(function () {
+		// 获取url中的src/url参数和ext参数；mode=preview 时渲染 HTML
+		var urlParams = new URLSearchParams(window.location.search);
+		var src = urlParams.get('src') || urlParams.get('url') || '';
+		var ext = urlParams.get('ext') || '';
+		var name = urlParams.get('name') || '';
+		var mode = urlParams.get('mode') || '';
 
-			const loading = this.$loading({
-				lock: true,
-				text: '资源加载中...',
-				spinner: 'el-icon-loading',
-				background: 'rgba(0, 0, 0, 0.9)'
-			});
-			// 获取url中的src/url参数和ext参数；mode=preview 时渲染 HTML
-			const urlParams = new URLSearchParams(window.location.search);
-			const src = urlParams.get('src') || urlParams.get('url') || '';
-			const ext = urlParams.get('ext') || '';
-			const name = urlParams.get('name') || '';
-			const mode = urlParams.get('mode') || '';
-
-			this.$nextTick(function(){
-				jPreview.preview({
-					container:"container",
-					staticPath:"./static",
-					url: src,
-					ext: ext,
-					name: name,
-					mode: mode,
-					watermarkSize: "",
-					priority: 1,
-					oburl: "",
-				});
-				loading.close();
-			})
-		},
-		methods: {
-			checkAccess() {
-				const AUTH_KEY = 'pv_auth';
-				const referrer = document.referrer;
-				
-				// 检查 referrer 是否同源
-                if (referrer) {
-                    try {
-                        const refHost = new URL(referrer).hostname;
-                        const curHost = window.location.hostname;
-                        if (refHost === curHost || curHost === '127.0.0.1' || curHost === 'localhost') {
-                            // 同源访问，设置 sessionStorage 标记（支持刷新）
-                            sessionStorage.setItem(AUTH_KEY, Date.now().toString());
-                            return true;
-                        }
-                    } catch (e) {}
-                }
-				
-				// 检查 sessionStorage 标记（允许刷新页面）
-				const authTime = sessionStorage.getItem(AUTH_KEY);
-				if (authTime) {
-				// 标记有效期 2 小时
-				if (Date.now() - parseInt(authTime) < 2 * 60 * 60 * 1000) {
-						return true;
-					}
-					sessionStorage.removeItem(AUTH_KEY);
-				}
-				
-				return false;
-			}
-		}
-	})
-	</script>
+		jPreview.preview({
+			container: "container",
+			staticPath: "./static",
+			url: src,
+			ext: ext,
+			name: name,
+			mode: mode,
+			watermarkSize: "",
+			priority: 1,
+			oburl: "",
+		});
+	})();
+</script>
 </body>
 </html>
