@@ -1,5 +1,7 @@
 // rar 必须整包读进 WASM 内存才能解析，超过这个体积就不在线解压了
 const RAR_MAX_BYTES = 100 * 1024 * 1024;
+// 预览默认把整文件读进内存；超过这个体积就提示下载，不在线预览
+const SMALL_FILE_MAX_BYTES = 10 * 1024 * 1024;
 
 let jPreview={
     config:{
@@ -363,7 +365,8 @@ let jPreview={
         const self = this;
         const opts = Object.assign({method: 'GET', referrerPolicy: 'no-referrer'}, options || {});
         // maxBytes 只是本函数的开关，别当成 fetch 的参数传下去
-        const maxBytes = opts.maxBytes || 0;
+        // 未指定时按小文件整包读取（10MB）；rar 等会传入更大上限
+        const maxBytes = opts.maxBytes || SMALL_FILE_MAX_BYTES;
         delete opts.maxBytes;
         const controller = new AbortController();
         opts.signal = opts.signal || controller.signal;
@@ -377,7 +380,7 @@ let jPreview={
             if (maxBytes && total > maxBytes) {
                 try { controller.abort(); } catch (e) { /* ignore */ }
                 throw new Error('文件 ' + utils.formatBytes(total) + '，超过 '
-                    + utils.formatBytes(maxBytes) + ' 的在线解压上限，请下载后查看');
+                    + utils.formatBytes(maxBytes) + ' 的在线预览上限，请下载后查看');
             }
             let fileName = '';
             const disposition = response.headers.get('content-disposition');
@@ -409,6 +412,10 @@ let jPreview={
                     }
                     chunks.push(res.value);
                     loaded += res.value.length;
+                    if (maxBytes && loaded > maxBytes) {
+                        try { controller.abort(); } catch (e) { /* ignore */ }
+                        throw new Error('文件超过 ' + utils.formatBytes(maxBytes) + ' 的在线预览上限，请下载后查看');
+                    }
                     self.progress.update(loaded, total);
                     return pump();
                 });
