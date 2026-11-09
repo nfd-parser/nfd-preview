@@ -1176,7 +1176,7 @@ let jPreview={
             return;
         }
         container.style.cssText = 'height:100vh;width:100%;display:flex;align-items:center;justify-content:center;background:#111';
-        dynamicLoadJs(this.config.staticPath + '/common/js/nfd-movi-loader.js?v1', function() {
+        dynamicLoadJs(this.config.staticPath + '/common/js/nfd-movi-loader.js?v2', function() {
             if (!window.NfdMoviLoader) {
                 self.nativeVideoView(url, false);
                 return;

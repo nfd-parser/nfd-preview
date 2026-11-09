@@ -90,7 +90,7 @@ pdf文档暂时不支持中文路径，并且PDF文件预览会造成XSS攻击�
 
 `preview.html` 使用 [Movi Player](https://github.com/MrUjjwalG/movi-player) 0.4.1 (Apache-2.0) 的 Slim Web Component。对于 MKV/MOV/AVI/TS/M2TS/MTS/HEVC/H265 使用增强播放器；MP4、WebM、FLV 等保持原来的 DPlayer，避免普通媒体额外下载解码器。文件扩展名无法判断视频是否为 4K，4K MP4 可通过查询参数 `player=movi` 强制增强；`player=dplayer` 切换回旧播放器。即使直接下载 URL 无扩展名，也可传 `ext=mkv`。
 
-增强播放器 JS 和 `movi.wasm` 仅在需要时加载。先尝试国内 npm CDN `https://npm.elemecdn.com/movi-player@0.4.1/dist/`，失败后尝试 `https://cdn.jsdelivr.net/npm/movi-player@0.4.1/dist/`。下载的 WASM 会检查 magic bytes 并转成 Blob URL，避免重复网络下载；这两个公共 CDN 的中国三网可达性、同步及时性及性能尚未实测。建议正式生产环境镜像固定版本的这两个静态资源到自行控制的国内 CDN。
+增强播放器 JS 和 `movi.wasm` 仅在需要时加载。依次尝试 ElemeCDN `npm.elemecdn.com` → npmmirror `registry.npmmirror.com` → JSDMirror `cdn.jsdmirror.cn`，以上均不可用时才尝试 jsDelivr `cdn.jsdelivr.net`。下载的 WASM 会检查 magic bytes 并转成 Blob URL，避免重复网络下载；这两个公共 CDN 的中国三网可达性、同步及时性及性能尚未实测。建议正式生产环境镜像固定版本的这两个静态资源到自行控制的国内 CDN。
 
 跨域视频 URL 必须允许 CORS，服务端最好支持 HTTP Range/206。302 的最终资源地址也需要 CORS；原生 DPlayer 不一定能播放 MKV 的不兼容音轨。上线前应实际验证 AC-3/E-AC-3、多音轨、字幕（SRT/ASS/PGS）、4K HEVC、视频 seek、弱网、浏览器差异，以及云盘下载站防盗链。
 

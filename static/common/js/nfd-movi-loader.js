@@ -4,9 +4,12 @@
 (function (global) {
     'use strict';
     const DIST = 'movi-player@0.4.1/dist/';
-    // Public mainland-facing npm CDN first; jsDelivr is an international fallback.
+    // Mainland-facing sources first; jsDelivr is the very last fallback.
+    // Mirror cache freshness for the pinned version must be verified before release.
     const cdnRoots = [
         'https://npm.elemecdn.com/' + DIST,
+        'https://registry.npmmirror.com/movi-player/0.4.1/files/dist/',
+        'https://cdn.jsdmirror.cn/npm/' + DIST,
         'https://cdn.jsdelivr.net/npm/' + DIST
     ];
     let scriptPromise = null;
@@ -24,7 +27,7 @@
                 tag.onload = tag.onerror = null;
                 tag.remove();
                 reject(new Error('播放器 JS 下载超时'));
-            }, 12000);
+            }, index === cdnRoots.length - 1 ? 8000 : 10000);
             function complete() { clearTimeout(timer); tag.onload = tag.onerror = null; }
             tag.src = cdnRoots[index] + 'element.slim.global.js';
             tag.onload = function() {
@@ -47,7 +50,7 @@
         if (index >= cdnRoots.length) throw new Error('FFmpeg WASM CDN 均不可用');
         const url = cdnRoots[index] + 'movi.wasm';
         const controller = new AbortController();
-        const timer = setTimeout(function() { controller.abort(); }, 30000);
+        const timer = setTimeout(function() { controller.abort(); }, index === cdnRoots.length - 1 ? 12000 : 18000);
         try {
             setStatus('正在加载高清播放器解码器…');
             const resp = await fetch(url, {mode: 'cors', signal: controller.signal});
