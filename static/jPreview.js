@@ -71,7 +71,7 @@ let jPreview={
         this.config.ext = this.config.ext || ext || '';
 
         // 如果url为空，或者后缀为空，则提示资源不存在
-        if (!url || !ext) {
+        if (!url || !this.config.ext) {
             this.error('资源不存在！');
             return;
         }
@@ -110,7 +110,7 @@ let jPreview={
         let url=this.config.url;
         let ext=this.config.ext;
         let static=this.config.staticPath;
-        let videoExt=['mp4','avi','3gp','rmvb','rm','flv','wmv','mkv','mov','mpeg','mpg','m4v','f4v','m4v','webm'];
+        let videoExt=['mp4','avi','3gp','rmvb','rm','flv','wmv','mkv','mov','mpeg','mpg','m4v','f4v','webm','ts','m2ts','mts','hevc','h265'];
         let imgExt=['jpeg','jpg','gif','png','bmp','ico','webp'];
         let pdfExt=['pdf'];
         let txtExt=['txt'];
@@ -155,15 +155,14 @@ let jPreview={
         }else if($.inArray(ext,otherArchiveExt)>=0){
             self.error(ext.toUpperCase() + ' 压缩包暂不支持在线预览，请下载后查看');
         }else if($.inArray(ext,videoExt)>=0){
-            var loadPlayer = function(){
-                dynamicLoadJs(static+"/common/js/DPlayer.min.js",function(){
-                    self.videoView(url);
-                })
-            };
-            if(ext === 'flv'){
-                dynamicLoadJs(static+"/common/js/flv.min.js",function(){ loadPlayer(); })
+            // File extension cannot reveal whether an MP4 is 4K: ?player=movi opts in.
+            // ?player=dplayer opts out, preserving the original browser player.
+            const playerMode = new URLSearchParams(window.location.search).get('player');
+            const enhancedExt = ['mkv','mov','avi','ts','m2ts','mts','hevc','h265'];
+            if (playerMode === 'movi' || (playerMode !== 'dplayer' && enhancedExt.includes(ext))) {
+                self.moviVideoView(url);
             } else {
-                loadPlayer();
+                self.nativeVideoView(url, ext === 'flv');
             }
         }else if($.inArray(ext,docExt)>=0 && this.config.priority == 1){
             dynamicLoadJs(static+"/docxjs/js/jszip.min.js",function(){
@@ -1155,6 +1154,42 @@ let jPreview={
         });
         // 兜底：部分容器格式（mkv/rmvb 等）不会抛事件，超时后把界面交还给播放器
         setTimeout(finish, 15000);
+    },
+    // Preserve the existing DPlayer path and flv.js-only handling.
+    nativeVideoView(url, isFlv) {
+        const self = this;
+        const start = function() {
+            dynamicLoadJs(self.config.staticPath + '/common/js/DPlayer.min.js', function() {
+                self.videoView(url);
+            });
+        };
+        if (isFlv) dynamicLoadJs(this.config.staticPath + '/common/js/flv.min.js', start);
+        else start();
+    },
+    // Movi Player is only loaded for enhanced videos (e.g. MKV). Other previews
+    // do not download the new JS or FFmpeg WASM dependency.
+    moviVideoView(url) {
+        const self = this;
+        const container = document.getElementById(this.config.container);
+        if (!container) {
+            self.progress.fail('找不到视频播放器容器', url);
+            return;
+        }
+        container.style.cssText = 'height:100vh;width:100%;display:flex;align-items:center;justify-content:center;background:#111';
+        dynamicLoadJs(this.config.staticPath + '/common/js/nfd-movi-loader.js?v1', function() {
+            if (!window.NfdMoviLoader) {
+                self.nativeVideoView(url, false);
+                return;
+            }
+            window.NfdMoviLoader.mount(container, url, {
+                onReady: function() { self.progress.done(); },
+                onFallback: function(reason) {
+                    console.warn('[NFD Preview] Movi failed; using DPlayer:', reason);
+                    container.replaceChildren();
+                    self.nativeVideoView(url, false);
+                }
+            });
+        });
     },
     videoView(url) {
         let container = this.config.container;
