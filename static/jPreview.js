@@ -1219,7 +1219,7 @@ let jPreview={
             return;
         }
         container.style.cssText = 'height:100vh;width:100%;display:flex;align-items:center;justify-content:center;background:#111';
-        dynamicLoadJs(this.config.staticPath + '/common/js/nfd-movi-loader.js?v3', function() {
+        dynamicLoadJs(this.config.staticPath + '/common/js/nfd-movi-loader.js?v4', function() {
             if (!window.NfdMoviLoader) {
                 self.moviErrorView(url, '高清播放器 JS 未成功初始化');
                 return;

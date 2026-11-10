@@ -104,3 +104,14 @@ pdf文档暂时不支持中文路径，并且PDF文件预览会造成XSS攻击�
 - 将播放器的 `engine` 设为 `wasm`；监听 `nativefallback`、`errordisplay`、`error`，并输出实际音轨编码/语言/声道的诊断信息，防止误把原生音轨不支持当成软解成功。
 - 软解或跨域失败时显示错误和“尝试原生播放器”按钮，由用户自行选择，不会暗中切回没有声音的旧播放路径。
 - 请在真实设备上验证 HTTPS 302 后的 CORS、Range、AC-3/E-AC-3、DTS/TrueHD、硬解能力；使用用户提供的 `15.mkv` 直链进行测试。当前远程执行环境 DNS 无法解析 `dl.qaiu.cn`，因此尚未完成音轨的 `ffprobe` 识别和浏览器端到端验证。
+
+
+### 查看 MKV 编码信息（v4）
+
+手机在预览页打开 vConsole 的 Log 面板，搜索 `[NFD Movi]`，可以看到：
+- `视频编码`：视频流 codec / codecString、分辨率、帧率、HDR
+- `全部音轨`：音轨 ID、codec / codecString、语言、名称、声道数、采样率和比特率
+- `当前音轨`：实际激活的音轨（多音轨切换时重新记录）
+- `内封字幕`：字幕 ID、编码、语言和类型
+
+编码列表取自 `<movi-player>.player.getMediaInfo()/getAudioTracks()`（不是元素上可能不存在的 `getAudioTracks()`），并读取 `player.trackManager.getActiveAudioTrack()`。在 `loadedmetadata` / `loadeddata` / `audiotrackchange` / `trackschange` / 解码报错时输出。只打印编码信息，不打印可能含签名参数的媒体下载 URL。

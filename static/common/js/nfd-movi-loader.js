@@ -122,24 +122,89 @@
             el.setAttribute('engine', 'wasm');
             if (build === 'slim' && asset) el.setAttribute('wasmurl', asset.url);
             let settled = false, timer = null;
-            const info = () => ({
-                requestedBuild: build,
-                actualBuild: el.build || 'unknown',
-                assetCDN: asset ? asset.cdn : 'bundled',
-                audioTracks: typeof el.getAudioTracks === 'function'
-                    ? el.getAudioTracks().map(x => ({
-                        id: x.id, codec: x.codec, language: x.language || x.lang,
-                        channels: x.channels
-                    })) : []
-            });
+            // The <movi-player> Web Component does not forward raw track
+            // lists: read its core player, not el.getAudioTracks().
+            const trackInfo = () => {
+                const core = el.player;
+                const safeList = (method, type) => {
+                    try {
+                        if (core && typeof core[method] === 'function') {
+                            return core[method]() || [];
+                        }
+                        const media = core && core.getMediaInfo && core.getMediaInfo();
+                        return Array.isArray(media?.tracks)
+                            ? media.tracks.filter(x => x.type === type) : [];
+                    } catch (err) {
+                        warn('Could not read ' + type + ' tracks:', err);
+                        return [];
+                    }
+                };
+                const videoTracks = safeList('getVideoTracks', 'video');
+                const audioTracks = safeList('getAudioTracks', 'audio');
+                const subtitleTracks = safeList('getSubtitleTracks', 'subtitle');
+                const manager = core && core.trackManager;
+                const active = method => {
+                    try {
+                        return manager && typeof manager[method] === 'function'
+                            ? manager[method]() : null;
+                    } catch (_) { return null; }
+                };
+                const video = t => ({
+                    id: t.id, codec: t.codec, codecString: t.codecString || '',
+                    width: t.width, height: t.height, fps: t.frameRate,
+                    pixelFormat: t.pixelFormat || '', hdr: Boolean(t.isHDR)
+                });
+                const audio = t => ({
+                    id: t.id, codec: t.codec, codecString: t.codecString || '',
+                    language: t.language || 'und', label: t.label || '',
+                    channels: t.channels, sampleRate: t.sampleRate,
+                    bitRate: t.bitRate
+                });
+                const subtitle = t => ({
+                    id: t.id, codec: t.codec, language: t.language || 'und',
+                    label: t.label || '', type: t.subtitleType || ''
+                });
+                const currentAudio = active('getActiveAudioTrack');
+                const currentVideo = active('getActiveVideoTrack');
+                const currentSubtitle = active('getActiveSubtitleTrack');
+                return {
+                    requestedBuild: build,
+                    actualBuild: el.build || 'unknown',
+                    assetCDN: asset ? asset.cdn : 'bundled',
+                    videoTracks: videoTracks.map(video),
+                    audioTracks: audioTracks.map(audio),
+                    subtitleTracks: subtitleTracks.map(subtitle),
+                    selectedVideo: currentVideo ? video(currentVideo) : null,
+                    selectedAudio: currentAudio ? audio(currentAudio) : null,
+                    selectedSubtitle: currentSubtitle ? subtitle(currentSubtitle) : null
+                };
+            };
+            const info = () => trackInfo();
+            let lastCodecSnapshot = '';
+            const logCodecs = reason => {
+                const data = trackInfo();
+                const fingerprint = JSON.stringify([
+                    data.videoTracks, data.audioTracks, data.subtitleTracks,
+                    data.selectedVideo, data.selectedAudio, data.selectedSubtitle
+                ]);
+                if (fingerprint === lastCodecSnapshot) return;
+                lastCodecSnapshot = fingerprint;
+                console.log('[NFD Movi] 音视频编码信息 (' + reason + '):', data);
+                console.log('[NFD Movi] 视频编码:', JSON.stringify(data.videoTracks));
+                console.log('[NFD Movi] 全部音轨:', JSON.stringify(data.audioTracks));
+                console.log('[NFD Movi] 当前音轨:', JSON.stringify(data.selectedAudio));
+                console.log('[NFD Movi] 内封字幕:', JSON.stringify(data.subtitleTracks));
+            };
             const ok = () => {
                 if (settled) return;
                 settled = true;
                 clearTimeout(timer);
-                warn('Playback initialized:', info());
+                logCodecs('ready');
+                console.log('[NFD Movi] Playback initialized:', info());
                 onReady();
             };
             const error = e => {
+                logCodecs('decode error');
                 const detail = e && e.detail;
                 const message = typeof detail === 'string' ? detail
                     : detail && (detail.message || detail.title)
@@ -152,6 +217,7 @@
                 }
             };
             const native = () => {
+                logCodecs('native fallback');
                 // Important: the slim upstream bundle can automatically switch
                 // to a native <video> after WASM trouble. For MKV, this is not
                 // a successful fix for an incompatible audio codec.
@@ -163,6 +229,11 @@
                     onFallback(reason, info());
                 }
             };
+            el.addEventListener('loadedmetadata', () => logCodecs('loadedmetadata'));
+            el.addEventListener('loadeddata', () => logCodecs('loadeddata'));
+            el.addEventListener('audiotrackchange', () => logCodecs('audiotrackchange'));
+            el.addEventListener('subtitletrackchange', () => logCodecs('subtitletrackchange'));
+            el.addEventListener('trackschange', () => logCodecs('trackschange'));
             el.addEventListener('loadedmetadata', ok, {once: true});
             el.addEventListener('loadeddata', ok, {once: true});
             el.addEventListener('canplay', ok, {once: true});
@@ -174,6 +245,7 @@
             el.setAttribute('src', mediaUrl);
             timer = setTimeout(() => {
                 if (!settled) {
+                    logCodecs('timeout');
                     settled = true;
                     onFallback('播放器超过 20 秒未能读取媒体元数据；请检查跨域、Range 和解码器', info());
                 }
