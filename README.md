@@ -95,3 +95,12 @@ pdf文档暂时不支持中文路径，并且PDF文件预览会造成XSS攻击�
 跨域视频 URL 必须允许 CORS，服务端最好支持 HTTP Range/206。302 的最终资源地址也需要 CORS；原生 DPlayer 不一定能播放 MKV 的不兼容音轨。上线前应实际验证 AC-3/E-AC-3、多音轨、字幕（SRT/ASS/PGS）、4K HEVC、视频 seek、弱网、浏览器差异，以及云盘下载站防盗链。
 
 此变更独立于主站构建，保持原有 `preview.html` 参数及非视频文件预览行为。高清增强路径默认采用第三方组件版本锁定，JS/WASM 失败会回退到 DPlayer。
+
+
+### 高清播放 CDN 与音频故障诊断（v3）
+
+- 公共镜像顺序：**JSDMirror → unpkg → jsDelivr（最后）**。已移除不可逐文件读取 npm 包的 `registry.npmmirror.com/.../files/dist` 与截图中失败的 ElemeCDN，版本固定 `movi-player@0.4.1`。
+- 首先验证并缓存独立 `movi.wasm`，成功后才初始化 Slim；如果所有独立 WASM 都失败，尝试内嵌 WASM 的 Full `element.global.js`，不再直接回退 DPlayer。
+- 将播放器的 `engine` 设为 `wasm`；监听 `nativefallback`、`errordisplay`、`error`，并输出实际音轨编码/语言/声道的诊断信息，防止误把原生音轨不支持当成软解成功。
+- 软解或跨域失败时显示错误和“尝试原生播放器”按钮，由用户自行选择，不会暗中切回没有声音的旧播放路径。
+- 请在真实设备上验证 HTTPS 302 后的 CORS、Range、AC-3/E-AC-3、DTS/TrueHD、硬解能力；使用用户提供的 `15.mkv` 直链进行测试。当前远程执行环境 DNS 无法解析 `dl.qaiu.cn`，因此尚未完成音轨的 `ffprobe` 识别和浏览器端到端验证。

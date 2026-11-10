@@ -1,130 +1,186 @@
-/* NFD Preview: Movi Player 0.4.1, Apache-2.0 (enhanced videos only).
- * Browser-only integration; no server transcoding. Pin the upstream version.
+/* NFD Preview enhanced MKV playback using Movi Player 0.4.1 (Apache-2.0).
+ * Order: verify external FFmpeg WASM -> Slim global JS.
+ * If external WASM is unavailable, try the Full JS (embeds FFmpeg WASM).
+ * Never silently treat an MKV native fallback as a successful software decode.
  */
 (function (global) {
     'use strict';
     const DIST = 'movi-player@0.4.1/dist/';
-    // Mainland-facing sources first; jsDelivr is the very last fallback.
-    // Mirror cache freshness for the pinned version must be verified before release.
-    const cdnRoots = [
-        'https://npm.elemecdn.com/' + DIST,
-        'https://registry.npmmirror.com/movi-player/0.4.1/files/dist/',
-        'https://cdn.jsdmirror.cn/npm/' + DIST,
-        'https://cdn.jsdelivr.net/npm/' + DIST
+    const CDNS = [
+        {name: 'JSDMirror', root: 'https://cdn.jsdmirror.cn/npm/' + DIST},
+        {name: 'unpkg', root: 'https://unpkg.com/' + DIST},
+        {name: 'jsDelivr (last resort)', root: 'https://cdn.jsdelivr.net/npm/' + DIST}
     ];
-    let scriptPromise = null;
+    const jsLoaded = Object.create(null);
     let wasmPromise = null;
-    function setStatus(s) {
-        const e = document.getElementById('jp-loading-stats');
-        if (e) e.textContent = s;
-    }
-    function fetchScript(index) {
-        if (global.customElements.get('movi-player')) return Promise.resolve();
-        if (index >= cdnRoots.length) return Promise.reject(new Error('播放器 JS CDN 均不可用'));
-        return new Promise(function(resolve, reject) {
-            const tag = document.createElement('script');
-            const timer = setTimeout(function() {
-                tag.onload = tag.onerror = null;
-                tag.remove();
-                reject(new Error('播放器 JS 下载超时'));
-            }, index === cdnRoots.length - 1 ? 8000 : 10000);
-            function complete() { clearTimeout(timer); tag.onload = tag.onerror = null; }
-            tag.src = cdnRoots[index] + 'element.slim.global.js';
-            tag.onload = function() {
-                complete();
-                if (global.customElements.get('movi-player')) resolve();
-                else reject(new Error('Movi Web Component 未注册'));
+    const warn = (...args) => console.warn('[NFD Movi]', ...args);
+    const hint = text => {
+        const el = document.getElementById('jp-loading-stats');
+        if (el) el.textContent = text;
+    };
+    function scriptAt(url, timeoutMs) {
+        return new Promise((resolve, reject) => {
+            const el = document.createElement('script');
+            let done = false;
+            const finish = (err) => {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                el.onload = el.onerror = null;
+                if (err) { el.remove(); reject(err); }
+                else resolve();
             };
-            tag.onerror = function() { complete(); tag.remove(); reject(new Error('播放器 JS 下载失败')); };
-            document.head.appendChild(tag);
-        }).catch(function (err) {
-            console.warn('[NFD Preview] Movi JS CDN unavailable:', cdnRoots[index], err);
-            return fetchScript(index + 1);
+            const timer = setTimeout(() => finish(new Error('JS CDN 超时')), timeoutMs);
+            el.src = url;
+            el.async = true;
+            el.onload = () => finish(null);
+            el.onerror = () => finish(new Error('JS CDN 无法加载'));
+            document.head.appendChild(el);
         });
     }
-    function loadScript() {
-        if (!scriptPromise) scriptPromise = fetchScript(0);
-        return scriptPromise;
-    }
-    async function fetchWasm(index) {
-        if (index >= cdnRoots.length) throw new Error('FFmpeg WASM CDN 均不可用');
-        const url = cdnRoots[index] + 'movi.wasm';
-        const controller = new AbortController();
-        const timer = setTimeout(function() { controller.abort(); }, index === cdnRoots.length - 1 ? 12000 : 18000);
-        try {
-            setStatus('正在加载高清播放器解码器…');
-            const resp = await fetch(url, {mode: 'cors', signal: controller.signal});
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            const expected = Number(resp.headers.get('content-length') || 0);
-            if (expected > 16 * 1024 * 1024) throw new Error('WASM 文件超过预期大小');
-            const buf = await resp.arrayBuffer();
-            const b = new Uint8Array(buf);
-            // Reject stale CDN error HTML or a different binary.
-            if (b.length < 8 || b.length > 16 * 1024 * 1024 ||
-                b[0] !== 0x00 || b[1] !== 0x61 || b[2] !== 0x73 || b[3] !== 0x6d) {
-                throw new Error('CDN 返回的不是有效 WASM 文件');
+    async function loadPlayerJS(build) {
+        if (global.customElements.get('movi-player')) return;
+        if (jsLoaded[build]) return jsLoaded[build];
+        const file = build === 'full' ? 'element.global.js' : 'element.slim.global.js';
+        const promise = (async () => {
+            for (let i = 0; i < CDNS.length; i++) {
+                const cdn = CDNS[i];
+                try {
+                    hint('加载 ' + build + ' 高清播放器：' + cdn.name);
+                    await scriptAt(cdn.root + file, i === CDNS.length - 1 ? 9000 : 12000);
+                    if (global.customElements.get('movi-player')) return;
+                    throw new Error('脚本完成，但播放器组件未注册');
+                } catch (e) {
+                    warn('JS source failed:', cdn.name, build, e.message);
+                    // A global build may have registered despite throwing.
+                    if (global.customElements.get('movi-player')) return;
+                }
             }
-            // The Blob URL is same-origin and prevents a second remote WASM fetch.
-            return URL.createObjectURL(new Blob([buf], {type: 'application/wasm'}));
-        } catch (e) {
-            console.warn('[NFD Preview] WASM CDN unavailable:', url, e);
-            return fetchWasm(index + 1);
-        } finally {
-            clearTimeout(timer);
+            throw new Error('所有播放器 JS CDN 均不可用（' + build + '）');
+        })();
+        jsLoaded[build] = promise;
+        return promise;
+    }
+    async function fetchWasm() {
+        for (let i = 0; i < CDNS.length; i++) {
+            const cdn = CDNS[i];
+            const controller = new AbortController();
+            const t = setTimeout(() => controller.abort(), i === CDNS.length - 1 ? 10000 : 15000);
+            try {
+                hint('正在加载 FFmpeg WASM：' + cdn.name);
+                const response = await fetch(cdn.root + 'movi.wasm', {
+                    mode: 'cors', cache: 'force-cache', signal: controller.signal
+                });
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const size = Number(response.headers.get('content-length') || 0);
+                if (size > 16 * 1024 * 1024) throw new Error('WASM 体积异常');
+                const buffer = await response.arrayBuffer();
+                const b = new Uint8Array(buffer);
+                if (b.byteLength < 8 || b.byteLength > 16 * 1024 * 1024 ||
+                    b[0] !== 0 || b[1] !== 97 || b[2] !== 115 || b[3] !== 109) {
+                    throw new Error('返回数据不是 WebAssembly');
+                }
+                return {url: URL.createObjectURL(new Blob([buffer], {
+                    type: 'application/wasm'
+                })), cdn: cdn.name, bytes: b.byteLength};
+            } catch (e) {
+                warn('WASM source failed:', cdn.name, e.message);
+            } finally { clearTimeout(t); }
         }
+        throw new Error('所有 FFmpeg WASM CDN 均不可用');
     }
     function loadWasm() {
-        if (!wasmPromise) wasmPromise = fetchWasm(0);
+        if (!wasmPromise) wasmPromise = fetchWasm();
         return wasmPromise;
     }
     async function mount(container, mediaUrl, hooks) {
-        const ready = hooks.onReady || function() {};
-        const fallback = hooks.onFallback || function() {};
+        const onReady = hooks.onReady || (() => {});
+        const onFallback = hooks.onFallback || (() => {});
+        const onWarning = hooks.onWarning || (() => {});
         if (!global.WebAssembly || !global.customElements) {
-            fallback('浏览器不支持 WebAssembly / Custom Elements');
+            onFallback('浏览器缺少 WebAssembly 或 Custom Elements');
             return;
         }
+        let build = 'slim', asset = null;
         try {
-            const result = await Promise.all([loadScript(), loadWasm()]);
-            const wasmUrl = result[1];
-            const player = document.createElement('movi-player');
-            player.style.cssText = 'display:block;width:100%;height:100%;min-height:240px';
-            player.setAttribute('controls', '');
-            player.setAttribute('fallback', 'native');
-            player.setAttribute('wasmurl', wasmUrl);
+            try {
+                asset = await loadWasm();
+                await loadPlayerJS('slim');
+            } catch (firstError) {
+                // Full includes the WASM binary inside its JS. It does not
+                // depend on a separate *.wasm endpoint and is slower to download.
+                if (global.customElements.get('movi-player')) throw firstError;
+                warn('Slim unavailable, trying Full bundled WASM:', firstError.message);
+                hint('独立 WASM 不可用，尝试内置解码器版本…');
+                build = 'full';
+                await loadPlayerJS('full');
+            }
+            const el = document.createElement('movi-player');
+            el.style.cssText = 'display:block;width:100%;height:100%;min-height:240px';
+            el.setAttribute('controls', '');
+            // A single WASM engine forbids a native-first engine sequence.
+            el.setAttribute('engine', 'wasm');
+            if (build === 'slim' && asset) el.setAttribute('wasmurl', asset.url);
             let settled = false, timer = null;
-            const finish = function() {
+            const info = () => ({
+                requestedBuild: build,
+                actualBuild: el.build || 'unknown',
+                assetCDN: asset ? asset.cdn : 'bundled',
+                audioTracks: typeof el.getAudioTracks === 'function'
+                    ? el.getAudioTracks().map(x => ({
+                        id: x.id, codec: x.codec, language: x.language || x.lang,
+                        channels: x.channels
+                    })) : []
+            });
+            const ok = () => {
                 if (settled) return;
                 settled = true;
                 clearTimeout(timer);
-                ready();
+                warn('Playback initialized:', info());
+                onReady();
             };
-            const fail = function(message) {
-                if (settled) return;
-                settled = true;
-                clearTimeout(timer);
-                fallback(message || '增强播放器未能加载');
+            const error = e => {
+                const detail = e && e.detail;
+                const message = typeof detail === 'string' ? detail
+                    : detail && (detail.message || detail.title)
+                    || '播放器发生解码错误';
+                if (settled) onWarning(message, info());
+                else {
+                    settled = true;
+                    clearTimeout(timer);
+                    onFallback(message, info());
+                }
             };
-            player.addEventListener('loadedmetadata', finish, {once: true});
-            player.addEventListener('loadeddata', finish, {once: true});
-            player.addEventListener('canplay', finish, {once: true});
-            player.addEventListener('playing', finish, {once: true});
-            player.addEventListener('error', function(event) {
-                fail((event && event.detail && event.detail.message) || 'Movi 播放器失败');
-            });
-            player.addEventListener('errordisplay', function(event) {
-                fail((event && event.detail && event.detail.message) || 'Movi 解码失败');
-            });
-            // Native fallthrough is handled within Movi and doesn't always imply
-            // the media is unplayable, so do not force a second fallback here.
-            container.replaceChildren(player);
-            // Set src only after wasmurl + listeners are ready.
-            player.setAttribute('src', mediaUrl);
-            // A stalled source must not leave the overlay indefinitely.
-            timer = setTimeout(finish, 18000);
+            const native = () => {
+                // Important: the slim upstream bundle can automatically switch
+                // to a native <video> after WASM trouble. For MKV, this is not
+                // a successful fix for an incompatible audio codec.
+                const reason = 'Movi 已退回浏览器原生解码，音轨软解未启用，请检查 WASM/跨域';
+                if (settled) onWarning(reason, info());
+                else {
+                    settled = true;
+                    clearTimeout(timer);
+                    onFallback(reason, info());
+                }
+            };
+            el.addEventListener('loadedmetadata', ok, {once: true});
+            el.addEventListener('loadeddata', ok, {once: true});
+            el.addEventListener('canplay', ok, {once: true});
+            el.addEventListener('playing', ok, {once: true});
+            el.addEventListener('error', error);
+            el.addEventListener('errordisplay', error);
+            el.addEventListener('nativefallback', native);
+            container.replaceChildren(el);
+            el.setAttribute('src', mediaUrl);
+            timer = setTimeout(() => {
+                if (!settled) {
+                    settled = true;
+                    onFallback('播放器超过 20 秒未能读取媒体元数据；请检查跨域、Range 和解码器', info());
+                }
+            }, 20000);
         } catch (e) {
-            fallback(e && e.message ? e.message : String(e));
+            onFallback(e && e.message ? e.message : String(e), {build});
         }
     }
-    global.NfdMoviLoader = {mount: mount};
+    global.NfdMoviLoader = {mount};
 })(window);
