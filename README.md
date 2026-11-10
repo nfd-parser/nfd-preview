@@ -115,3 +115,14 @@ pdf文档暂时不支持中文路径，并且PDF文件预览会造成XSS攻击�
 - `内封字幕`：字幕 ID、编码、语言和类型
 
 编码列表取自 `<movi-player>.player.getMediaInfo()/getAudioTracks()`（不是元素上可能不存在的 `getAudioTracks()`），并读取 `player.trackManager.getActiveAudioTrack()`。在 `loadedmetadata` / `loadeddata` / `audiotrackchange` / `trackschange` / 解码报错时输出。只打印编码信息，不打印可能含签名参数的媒体下载 URL。
+
+
+### MP4 智能识别与 FFmpeg WASM 静态资源加速（v5）
+
+- `static/common/js/nfd-mp4-probe.js` 仅通过 HTTP Range/206 小段请求识别 MP4 `moov/trak/mdia/stsd` 中的视频编码、分辨率、音频 sample-entry 编码。单次探测窗口 128 KiB，单个 `moov` 最多 4 MiB，6.5 秒超时。**不会主动下载整个 MP4**；必须满足 CORS + Range。无法探测时根据文件名 4K/HDR/HEVC 等标识兜底，普通文件默认 DPlayer 并提供“增强播放（修复无声）”按钮。
+- 识别到 HEVC/AV1/不认识的视频编码、高分辨率（宽≥2560 或高≥1440）、AC-3/E-AC-3/DTS 等非普通 MP4 音轨时自动选 Movi；一般 1080p H.264 + AAC 使用原来的 DPlayer。手工 `player=movi` 和 `player=dplayer` 始终有效。
+- Movi 使用 `engine="wasm"` 解封装、`sw="auto"` 优先 WebCodecs 硬解视频，遇到不支持再切 WASM。注意 `movi-player@0.4.1` 的音频解码路径统一使用 FFmpeg WASM，并不意味着视频也必须软解。
+- **生产环境推荐同源静态资源：** 在仓库根目录执行 `bash scripts/vendor-movi.sh`，从 npm 官方发布包安装固定版本 `element.slim.global.js`、`element.global.js`、`movi.wasm` 至 `static/vendor/movi-player/0.4.1/`，提交并部署该目录。预览页自动查找 `manifest.json`，存在时优先从本站加载 JS 和 WASM，避免跨境 CDN。**此次 PR 不包含这些 10MB 左右的大型二进制资源，未执行安装前仍会使用公共源。**
+- 公共源顺序：JSDMirror → unpkg → jsDelivr Fastly → 普通 jsDelivr（最后）。`cdnping.org/benchmark/cdn` 测的是小型 CSS 延迟，不能据此保证 WASM 大文件吞吐速度；需要国内三网实测。
+- 预览参数兼容不变；测试页面使用 `name=S01E04%204KHQHDR-GyWEB.mp4&ext=mp4` 会根据文件名至少触发 Movi，即使源站不允许前端 Range 探测。
+
