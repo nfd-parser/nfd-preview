@@ -6,11 +6,37 @@
 (function (global) {
     'use strict';
     const DIST = 'movi-player@0.4.1/dist/';
-    const CDNS = [
+    const REMOTE_CDNS = [
         {name: 'JSDMirror', root: 'https://cdn.jsdmirror.cn/npm/' + DIST},
         {name: 'unpkg', root: 'https://unpkg.com/' + DIST},
+        {name: 'jsDelivr Fastly (backup)', root: 'https://fastly.jsdelivr.net/npm/' + DIST},
         {name: 'jsDelivr (last resort)', root: 'https://cdn.jsdelivr.net/npm/' + DIST}
     ];
+    // Optional pinned first-party assets, installed by scripts/vendor-movi.sh.
+    // A small manifest probe avoids requesting nonexistent 5.6MB binaries.
+    const localRoot = new URL('../../vendor/movi-player/0.4.1/',
+        document.currentScript.src).href;
+    let sourcesPromise = null;
+    function sources() {
+        if (!sourcesPromise) sourcesPromise = (async () => {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 1500);
+            try {
+                const response = await fetch(localRoot + 'manifest.json', {
+                    signal: controller.signal, cache: 'force-cache'
+                });
+                if (response.ok) {
+                    const manifest = await response.json();
+                    if (manifest && manifest.version === '0.4.1') {
+                        return [{name:'NFD 本站静态 CDN', root:localRoot}, ...REMOTE_CDNS];
+                    }
+                }
+            } catch (_) { /* Self-hosted assets not installed yet */ }
+            finally { clearTimeout(timer); }
+            return REMOTE_CDNS;
+        })();
+        return sourcesPromise;
+    }
     const jsLoaded = Object.create(null);
     let wasmPromise = null;
     const warn = (...args) => console.warn('[NFD Movi]', ...args);
@@ -43,6 +69,7 @@
         if (jsLoaded[build]) return jsLoaded[build];
         const file = build === 'full' ? 'element.global.js' : 'element.slim.global.js';
         const promise = (async () => {
+            const CDNS = await sources();
             for (let i = 0; i < CDNS.length; i++) {
                 const cdn = CDNS[i];
                 try {
@@ -62,6 +89,7 @@
         return promise;
     }
     async function fetchWasm() {
+        const CDNS = await sources();
         for (let i = 0; i < CDNS.length; i++) {
             const cdn = CDNS[i];
             const controller = new AbortController();
@@ -120,6 +148,7 @@
             el.setAttribute('controls', '');
             // A single WASM engine forbids a native-first engine sequence.
             el.setAttribute('engine', 'wasm');
+            el.setAttribute('sw', 'auto'); // Prefer WebCodecs for HEVC 4K, WASM fallback.
             if (build === 'slim' && asset) el.setAttribute('wasmurl', asset.url);
             let settled = false, timer = null;
             // The <movi-player> Web Component does not forward raw track

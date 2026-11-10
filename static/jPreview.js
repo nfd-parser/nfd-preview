@@ -155,14 +155,17 @@ let jPreview={
         }else if($.inArray(ext,otherArchiveExt)>=0){
             self.error(ext.toUpperCase() + ' 压缩包暂不支持在线预览，请下载后查看');
         }else if($.inArray(ext,videoExt)>=0){
-            // File extension cannot reveal whether an MP4 is 4K: ?player=movi opts in.
-            // ?player=dplayer opts out, preserving the original browser player.
+            // Codec-aware MP4 routing; manual overrides are always honored.
             const playerMode = new URLSearchParams(window.location.search).get('player');
             const enhancedExt = ['mkv','mov','avi','ts','m2ts','mts','hevc','h265'];
             if (playerMode === 'movi' || (playerMode !== 'dplayer' && enhancedExt.includes(ext))) {
                 self.moviVideoView(url);
-            } else {
+            } else if (playerMode === 'dplayer' || ext === 'flv') {
                 self.nativeVideoView(url, ext === 'flv');
+            } else if (['mp4','m4v','3gp'].includes(ext)) {
+                self.smartMp4VideoView(url);
+            } else {
+                self.nativeVideoView(url, false);
             }
         }else if($.inArray(ext,docExt)>=0 && this.config.priority == 1){
             dynamicLoadJs(static+"/docxjs/js/jszip.min.js",function(){
@@ -1198,6 +1201,50 @@ let jPreview={
         console.warn('[NFD Preview]', reason, info);
         container.appendChild(banner);
     },
+    // Probe MP4 sample entries with 206 Range; never fetch the entire file.
+    smartMp4VideoView(url) {
+        const self = this;
+        const likelyHQ = /(?:4k|2160p|uhd|hdr|dolby.?vision|hevc|h265|10bit|10-bit)/i
+            .test(this.config.name || '');
+        const fallback = reason => {
+            console.warn('[NFD Preview] MP4 metadata unavailable:', reason);
+            if (likelyHQ) self.moviVideoView(url);
+            else self.nativeVideoView(url, false);
+        };
+        const node = this.progress.el('jp-loading-stats');
+        if (node) node.textContent = '正在识别 MP4 音视频编码…';
+        const script = document.createElement('script');
+        let settled = false;
+        const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            script.onload = script.onerror = null;
+            fallback('metadata probe script timeout');
+        }, 4000);
+        script.src = this.config.staticPath + '/common/js/nfd-mp4-probe.js?v1';
+        script.onload = async function() {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            if (!window.NfdMp4Probe) { fallback('probe module not registered'); return; }
+            try {
+                const result = await window.NfdMp4Probe.inspect(url);
+                const choice = window.NfdMp4Probe.choose(result, self.config.name);
+                console.info('[NFD Preview] MP4 codec probe:', result, choice);
+                if (choice.player === 'movi') self.moviVideoView(url);
+                else self.nativeVideoView(url, false);
+            } catch (err) {
+                fallback(err && err.message ? err.message : String(err));
+            }
+        };
+        script.onerror = function() {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            fallback('metadata probe script unavailable');
+        };
+        document.head.appendChild(script);
+    },
     // Preserve the existing DPlayer path and flv.js-only handling.
     nativeVideoView(url, isFlv) {
         const self = this;
@@ -1219,7 +1266,7 @@ let jPreview={
             return;
         }
         container.style.cssText = 'height:100vh;width:100%;display:flex;align-items:center;justify-content:center;background:#111';
-        dynamicLoadJs(this.config.staticPath + '/common/js/nfd-movi-loader.js?v4', function() {
+        dynamicLoadJs(this.config.staticPath + '/common/js/nfd-movi-loader.js?v5', function() {
             if (!window.NfdMoviLoader) {
                 self.moviErrorView(url, '高清播放器 JS 未成功初始化');
                 return;
@@ -1261,6 +1308,26 @@ let jPreview={
             }
         });
         this.bindMediaReady(player.video, url);
+        // The browser can accept MP4 video yet silently fail to decode audio.
+        // Keep an explicit enhancement option even after a "compatible" probe.
+        if (['mp4','m4v','3gp'].includes(this.config.ext)) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = '增强播放（修复无声）';
+            button.style.cssText = 'position:absolute;z-index:20;top:12px;right:12px;padding:7px 11px;border-radius:6px;border:1px solid #aaa;background:#18202acc;color:#fff;cursor:pointer;font-size:12px';
+            const root = document.getElementById(container);
+            if (root) {
+                root.style.position = 'relative';
+                root.appendChild(button);
+                button.addEventListener('click', () => {
+                    button.disabled = true;
+                    try { player.pause(); } catch (_) {}
+                    try { player.destroy(); } catch (_) {}
+                    this.progress.start(this.config.name);
+                    this.moviVideoView(url);
+                });
+            }
+        }
     },
     audioView(url){
         const container = this.config.container;
