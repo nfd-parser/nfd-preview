@@ -1155,6 +1155,49 @@ let jPreview={
         // 兜底：部分容器格式（mkv/rmvb 等）不会抛事件，超时后把界面交还给播放器
         setTimeout(finish, 15000);
     },
+    // Never silently retry native DPlayer for an advanced audio track:
+    // it would reproduce the original unsupported-audio symptom.
+    moviErrorView(url, reason, info) {
+        this.progress.done();
+        const container = document.getElementById(this.config.container);
+        if (!container) return;
+        container.replaceChildren();
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'box-sizing:border-box;max-width:660px;padding:20px;color:#f1f5f9;font:14px/1.6 sans-serif;text-align:left';
+        const h = document.createElement('h3');
+        h.textContent = '高清解码失败';
+        const desc = document.createElement('p');
+        desc.textContent = reason || '未知原因，请检查控制台';
+        const details = document.createElement('pre');
+        details.style.cssText = 'white-space:pre-wrap;word-break:break-all;color:#94a3b8;font-size:12px';
+        details.textContent = info ? JSON.stringify(info, null, 2) : '';
+        const native = document.createElement('button');
+        native.type = 'button';
+        native.textContent = '尝试原生播放器（音轨可能不支持）';
+        native.style.cssText = 'padding:10px 14px;margin-right:12px;border:0;border-radius:6px;cursor:pointer';
+        native.addEventListener('click', () => {
+            container.replaceChildren();
+            this.nativeVideoView(url, false);
+        });
+        const direct = document.createElement('a');
+        direct.textContent = '直接打开 / 下载';
+        direct.href = url;
+        direct.target = '_blank';
+        direct.rel = 'noopener noreferrer';
+        direct.style.cssText = 'color:#7dd3fc';
+        wrap.append(h, desc, details, native, direct);
+        container.appendChild(wrap);
+    },
+    moviWarningView(container, reason, info) {
+        if (!container || container.querySelector('.nfd-movi-warning')) return;
+        container.style.position = 'relative';
+        const banner = document.createElement('div');
+        banner.className = 'nfd-movi-warning';
+        banner.style.cssText = 'position:absolute;top:8px;left:8px;right:8px;z-index:99;padding:9px 12px;border-radius:6px;background:rgba(127,29,29,.96);color:#fff;font:13px/1.5 sans-serif';
+        banner.textContent = String(reason || '音频软解未能正常启用');
+        console.warn('[NFD Preview]', reason, info);
+        container.appendChild(banner);
+    },
     // Preserve the existing DPlayer path and flv.js-only handling.
     nativeVideoView(url, isFlv) {
         const self = this;
@@ -1176,17 +1219,20 @@ let jPreview={
             return;
         }
         container.style.cssText = 'height:100vh;width:100%;display:flex;align-items:center;justify-content:center;background:#111';
-        dynamicLoadJs(this.config.staticPath + '/common/js/nfd-movi-loader.js?v2', function() {
+        dynamicLoadJs(this.config.staticPath + '/common/js/nfd-movi-loader.js?v4', function() {
             if (!window.NfdMoviLoader) {
-                self.nativeVideoView(url, false);
+                self.moviErrorView(url, '高清播放器 JS 未成功初始化');
                 return;
             }
             window.NfdMoviLoader.mount(container, url, {
                 onReady: function() { self.progress.done(); },
-                onFallback: function(reason) {
-                    console.warn('[NFD Preview] Movi failed; using DPlayer:', reason);
-                    container.replaceChildren();
-                    self.nativeVideoView(url, false);
+                onFallback: function(reason, info) {
+                    console.error('[NFD Preview] Enhanced playback failed:', reason, info);
+                    self.moviErrorView(url, reason, info);
+                },
+                onWarning: function(reason, info) {
+                    self.progress.done();
+                    self.moviWarningView(container, reason, info);
                 }
             });
         });
